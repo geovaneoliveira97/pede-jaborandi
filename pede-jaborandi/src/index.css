@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Material You — Color Tokens ─────────────────────────────────────────── */
+:root {
+  /* Primary — laranja profundo (derivado do #E85D26 original) */
+  --md-primary:            #B54A00;
+  --md-on-primary:         #FFFFFF;
+  --md-primary-container:  #FFDBCC;
+  --md-on-primary-container: #3A0C00;
+
+  /* Secondary */
+  --md-secondary:           #77574B;
+  --md-on-secondary:        #FFFFFF;
+  --md-secondary-container: #FFDBD1;
+  --md-on-secondary-container: #2C160E;
+
+  /* Tertiary — âmbar dourado */
+  --md-tertiary:           #695F30;
+  --md-on-tertiary:        #FFFFFF;
+  --md-tertiary-container: #F2E3AA;
+  --md-on-tertiary-container: #221B00;
+
+  /* Error */
+  --md-error:            #BA1A1A;
+  --md-on-error:         #FFFFFF;
+  --md-error-container:  #FFDAD6;
+  --md-on-error-container: #410002;
+
+  /* Surface */
+  --md-background:         #FFF8F6;
+  --md-on-background:      #231917;
+  --md-surface:            #FFF8F6;
+  --md-on-surface:         #231917;
+  --md-surface-variant:    #F5DED7;
+  --md-on-surface-variant: #53433F;
+  --md-outline:            #85736E;
+  --md-outline-variant:    #D8C2BB;
+
+  /* Surface containers */
+  --md-surface-lowest:  #FFFFFF;
+  --md-surface-low:     #FFF1EE;
+  --md-surface:         #FDEAE4;
+  --md-surface-high:    #F7E5DE;
+  --md-surface-highest: #F1DFD9;
+
+  /* Elevação via sombra */
+  --md-elev-1: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px 1px rgba(0,0,0,.04);
+  --md-elev-2: 0 1px 2px rgba(0,0,0,.06), 0 2px 6px 2px rgba(0,0,0,.06);
+  --md-elev-3: 0 1px 2px rgba(0,0,0,.06), 0 4px 8px 3px rgba(0,0,0,.08);
+
+  /* Shape */
+  --shape-xs:   4px;
+  --shape-sm:   8px;
+  --shape-md:   12px;
+  --shape-lg:   16px;
+  --shape-xl:   28px;
+  --shape-full: 9999px;
+}
+
+@layer base {
+  html { @apply antialiased; }
+
+  body {
+    background-color: var(--md-background);
+    color: var(--md-on-background);
+    font-family: 'Google Sans', 'Nunito', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  * { box-sizing: border-box; }
+
+  ::-webkit-scrollbar       { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--md-background); }
+  ::-webkit-scrollbar-thumb { background: var(--md-outline-variant); border-radius: 2px; }
+
+  /* Ícones Material Symbols */
+  .ms {
+    font-family: 'Material Symbols Rounded';
+    font-size: 24px;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    user-select: none;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .ms-filled {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+}
+
+@layer components {
+  /* ── Card — superfície levantada ── */
+  .card {
+    @apply rounded-[28px] border;
+    background: var(--md-surface-lowest);
+    border-color: var(--md-outline-variant);
+    box-shadow: var(--md-elev-1);
+  }
+
+  /* ── Botão primário (filled) ── */
+  .btn-primary {
+    background: var(--md-primary);
+    color: var(--md-on-primary);
+    font-family: 'Google Sans', sans-serif;
+    @apply font-bold px-6 py-3 rounded-full
+           transition-all duration-200 active:scale-95;
+  }
+  .btn-primary:hover { filter: brightness(0.92); }
+
+  /* ── Botão tonal (secondary container) ── */
+  .btn-tonal {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+    font-family: 'Google Sans', sans-serif;
+    @apply font-bold px-6 py-3 rounded-full
+           transition-all duration-200 active:scale-95;
+  }
+
+  /* ── Label de formulário (M3 style) ── */
+  .form-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+    @apply block mb-1;
+  }
+
+  /* ── Input outlined (M3) ── */
+  .form-input {
+    width: 100%;
+    height: 52px;
+    border-radius: var(--shape-sm);
+    border: 1px solid var(--md-outline-variant);
+    background: var(--md-surface-low);
+    padding: 0 14px;
+    font-family: 'Google Sans', sans-serif;
+    font-size: 15px;
+    color: var(--md-on-surface);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .form-input::placeholder { color: var(--md-on-surface-variant); }
+  .form-input:focus {
+    border-color: var(--md-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--md-primary) 15%, transparent);
+  }
+
+  /* ── Chip de filtro ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: var(--shape-full);
+    border: 1px solid var(--md-outline-variant);
+    background: var(--md-surface-lowest);
+    color: var(--md-on-surface-variant);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .chip.active,
+  .chip[aria-pressed="true"] {
+    background: var(--md-secondary-container);
+    color: var(--md-on-secondary-container);
+    border-color: transparent;
+  }
+
+  /* ── Ripple state layer ── */
+  .ripple {
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .ripple::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    border-radius: inherit;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .ripple:hover::after  { opacity: 0.08; }
+  .ripple:active::after { opacity: 0.12; }
+}
+
+/* ── Animação de entrada (mantida do original) ── */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-enter {
+  animation: fadeSlideUp 0.25s ease-out both;
+}
