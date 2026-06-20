@@ -49,6 +49,7 @@ function mapStore(raw: Record<string, unknown>): Store {
     rating:       raw.rating       != null ? (raw.rating       as number) : undefined,
     deliveryTime: raw.delivery_time != null ? (raw.delivery_time as string) : undefined,
     coverImage:   raw.cover_image  != null ? (raw.cover_image  as string) : undefined,
+    owner_id:     raw.owner_id     != null ? (raw.owner_id     as string) : undefined,
     products:     rawProducts.map(mapProduct),
   }
 }

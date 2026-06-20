@@ -1,6 +1,6 @@
 // src/App.tsx
 
-import { useState, useCallback, lazy, Suspense, useEffect } from 'react'
+import { useState, useCallback, lazy, Suspense, useEffect, useMemo } from 'react'
 import type { AppView, Store, Product, StoreStatus, Order, OrderStatus } from './types/types'
 import { useStores }        from './hooks/useStores'
 import { useCart }          from './hooks/useCart'
@@ -12,6 +12,8 @@ import {
   apiAddProduct, apiUpdateProduct,
   apiDeleteProduct, apiDeleteStore,
 } from './lib/adminApi'
+import { resolveRole, type AuthUser } from './lib/auth'
+import { isSupabaseConfigured, getSupabase } from './lib/supabase'
 
 import Header        from './components/Header'
 import BottomNav     from './components/BottomNav'
@@ -52,13 +54,34 @@ export default function App() {
   const [localStores,  setLocalStores]  = useState<Store[] | null>(null)
   const [orders,       setOrders]       = useState<Order[]>([])
   const [quickRating,  setQuickRating]  = useState<{ storeName: string } | null>(null)
+  const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
 
   const { stores: fetchedStores, loading, error, retry } = useStores()
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+    getSupabase().auth.getSession().then(({ data: { session } }) => {
+      const u = session?.user
+      if (u?.email) setAuthUser({ id: u.id, email: u.email, role: resolveRole(u.email) })
+    })
+    const { data: { subscription } } = getSupabase().auth.onAuthStateChange((_event, session) => {
+      const u = session?.user
+      setAuthUser(u?.email ? { id: u.id, email: u.email, role: resolveRole(u.email) } : null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
   const { items, totalItems, totalPrice, addItem, clearCart, changeQty } = useCart()
   const { message: toastMsg, visible: toastVisible, showToast } = useToast()
   const { canInstall, install, dismiss } = useInstallPrompt()
 
   const activeStores = localStores ?? fetchedStores
+
+  // Lojas visíveis no painel admin: superadmin vê todas, comerciante vê só as suas
+  const adminStores = useMemo(() => {
+    if (!authUser) return []
+    if (authUser.role === 'superadmin') return activeStores
+    return activeStores.filter(s => s.owner_id === authUser.id)
+  }, [authUser, activeStores])
 
   // ── History API: sincroniza botão Voltar do Android ──────────────────────
   useEffect(() => {
@@ -115,11 +138,11 @@ export default function App() {
   }, [fetchedStores, showToast])
 
   const handleAddStore = useCallback(async (store: Omit<Store, 'id'>) => {
-    const { id, error: err } = await apiAddStore(store)
+    const { id, error: err } = await apiAddStore(store, authUser?.id)
     if (err || !id) { showToast('Erro ao salvar comércio'); return }
-    setLocalStores(prev => [...(prev ?? fetchedStores), { ...store, id, products: [] }])
+    setLocalStores(prev => [...(prev ?? fetchedStores), { ...store, id, products: [], owner_id: authUser?.id }])
     showToast('✓ Comércio cadastrado!')
-  }, [fetchedStores, showToast])
+  }, [fetchedStores, showToast, authUser])
 
   const handleUpdateStore = useCallback(async (
     storeId: number,
@@ -255,7 +278,8 @@ export default function App() {
         {view === 'admin' && (
           <Suspense fallback={null}>
             <Admin
-              stores={activeStores}
+              authUser={authUser}
+              stores={adminStores}
               orders={orders}
               onToggleStore={handleToggleStore}
               onAddStore={handleAddStore}

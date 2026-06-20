@@ -13,7 +13,8 @@ function friendlyError(msg: string): string {
 // ── Stores ────────────────────────────────────────────────────────────────────
 
 export async function apiAddStore(
-  store: Omit<Store, 'id' | 'products'>
+  store: Omit<Store, 'id' | 'products'>,
+  ownerId?: string,
 ): Promise<{ id: number | null; error: string | null }> {
   if (!isSupabaseConfigured()) return { id: Date.now(), error: null }
   const { data, error } = await getSupabase()
@@ -24,6 +25,7 @@ export async function apiAddStore(
       mode: store.mode ?? 'delivery',
       rating: store.rating ?? null, delivery_time: store.deliveryTime ?? null,
       cover_image: store.coverImage ?? null,
+      owner_id: ownerId ?? null,
     })
     .select('id').single()
   if (error) return { id: null, error: friendlyError(error.message) }
@@ -43,9 +45,9 @@ export async function apiUpdateStore(
   if (updates.color        !== undefined) payload.color         = updates.color
   if (updates.status       !== undefined) payload.status        = updates.status
   if (updates.mode         !== undefined) payload.mode          = updates.mode
-  if (updates.rating       !== undefined) payload.rating        = updates.rating ?? null
-  if (updates.deliveryTime !== undefined) payload.delivery_time = updates.deliveryTime ?? null
-  if (updates.coverImage   !== undefined) payload.cover_image   = updates.coverImage ?? null
+  if ('rating' in updates)                payload.rating        = updates.rating ?? null
+  if (updates.deliveryTime !== undefined) payload.delivery_time = updates.deliveryTime || null
+  if ('coverImage' in updates)            payload.cover_image   = updates.coverImage ?? null
   const { error } = await getSupabase().from('stores').update(payload).eq('id', storeId)
   return { error: error ? friendlyError(error.message) : null }
 }
@@ -187,6 +189,17 @@ export async function apiUpdateOrderStatus(
   const { error } = await getSupabase()
     .from('orders')
     .update({ status })
+    .eq('id', Number(orderId))
+  return { error: error ? error.message : null }
+}
+
+export async function apiDeleteOrder(
+  orderId: string
+): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured()) return { error: null }
+  const { error } = await getSupabase()
+    .from('orders')
+    .delete()
     .eq('id', Number(orderId))
   return { error: error ? error.message : null }
 }

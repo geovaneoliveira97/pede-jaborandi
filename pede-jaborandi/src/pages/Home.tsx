@@ -57,28 +57,31 @@ export default function Home({ stores, onSelect }: HomeProps) {
   return (
     <div className="space-y-4 animate-enter">
 
-      {/* ── Banner hero ── */}
+      {/* ── Banner hero compacto ── */}
       <section
-        className="relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #E85D26 0%, #C44D1E 100%)', borderRadius: '16px', padding: '16px 16px' }}
+        className="relative overflow-hidden flex items-center justify-between"
+        style={{ background: 'linear-gradient(135deg, #E85D26 0%, #C44D1E 100%)', borderRadius: '16px', padding: '14px 16px' }}
       >
-        <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} aria-hidden="true" />
-        <div className="absolute -right-3 -bottom-4 w-14 h-14 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} aria-hidden="true" />
-        <div className="inline-flex items-center gap-1.5 rounded-full mb-2" style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 10px' }}>
-          <span style={{ fontSize: '10px' }} aria-hidden="true">📍</span>
-          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Jaborandi – SP</span>
+        <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full" style={{ background: 'rgba(255,255,255,0.08)' }} aria-hidden="true" />
+        <div className="absolute -right-2 -bottom-3 w-12 h-12 rounded-full" style={{ background: 'rgba(255,255,255,0.05)' }} aria-hidden="true" />
+        <div>
+          <div className="inline-flex items-center gap-1.5 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 10px' }}>
+            <span style={{ fontSize: '10px' }} aria-hidden="true">📍</span>
+            <span className="text-[10px] font-bold text-white uppercase tracking-widest">Jaborandi – SP</span>
+          </div>
+          <h1 className="font-black text-white" style={{ fontSize: '20px', lineHeight: '1.2' }}>
+            O que vai pedir hoje?
+          </h1>
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {['Sem taxa', 'Direto no WhatsApp'].map(tag => (
+              <span key={tag} className="font-bold rounded-full"
+                style={{ fontSize: '10px', padding: '2px 8px', background: 'rgba(255,255,255,0.2)', color: 'white' }}>
+                ✓ {tag}
+              </span>
+            ))}
+          </div>
         </div>
-        <h1 className="font-black text-white leading-tight" style={{ fontSize: '24px', lineHeight: '1.15' }}>
-          O que vai<br />pedir hoje?
-        </h1>
-        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-          {['Sem cadastro', 'Sem taxa', 'Direto no WhatsApp'].map(tag => (
-            <span key={tag} className="font-bold rounded-full"
-              style={{ fontSize: '10px', padding: '3px 9px', background: 'rgba(255,255,255,0.2)', color: 'white' }}>
-              ✓ {tag}
-            </span>
-          ))}
-        </div>
+        <span style={{ fontSize: '48px', lineHeight: 1 }} aria-hidden="true">🍔</span>
       </section>
 
       {/* ── Pedir Novamente ── */}
@@ -196,16 +199,16 @@ export default function Home({ stores, onSelect }: HomeProps) {
                   {openDelivery.length} {openDelivery.length === 1 ? 'comércio' : 'comércios'}
                 </span>
               </div>
-              <div className="space-y-3 mb-4">
-                {openDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} />)}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {openDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" />)}
               </div>
             </>
           )}
           {closedDelivery.length > 0 && (
             <>
               <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--md-on-surface-variant)' }}>Fechados no momento</h2>
-              <div className="space-y-3 mb-4">
-                {closedDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} />)}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {closedDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" />)}
               </div>
             </>
           )}

@@ -82,6 +82,7 @@ export interface Store {
   coverImage?:    string
   openingHours?:  OpeningHours
   featured?:      boolean
+  owner_id?:      string
 }
 
 // ── Item no carrinho ───────────────────────────────────────────────────────

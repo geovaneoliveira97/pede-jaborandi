@@ -2,12 +2,13 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import type { Store, Product, StoreStatus, Order, OrderStatus } from '../types/types'
+import type { AuthUser } from '../lib/auth'
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase'
 import { formatBRL } from '../lib/format'
 import {
   getLoyaltyConfig, setLoyaltyActive, updateLoyaltyConfig, type LoyaltyConfig,
 } from '../lib/loyaltyApi'
-import { apiGetRecentOrders, apiUpdateOrderStatus } from '../lib/adminApi'
+import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder } from '../lib/adminApi'
 import ImageUpload from '../components/ImageUpload'
 import OrderStatusPanel from '../components/OrderStatusPanel'
 
@@ -17,6 +18,7 @@ const CATEGORY_OPTIONS = [
 ]
 
 export interface AdminProps {
+  authUser:              AuthUser | null
   stores:                Store[]
   orders:                Order[]
   onToggleStore:         (storeId: number, status: StoreStatus) => Promise<void>
@@ -95,7 +97,7 @@ function EditStoreModal({ store, onSave, onCancel }: {
       name: form.name.trim(), category: form.category, description: form.description.trim(),
       phone: '55' + form.phone.replace(/\D/g, ''), color: form.color || '#E85D26',
       rating: form.rating ? parseFloat(form.rating) : undefined,
-      deliveryTime: form.deliveryTime.trim() || undefined,
+      deliveryTime: form.deliveryTime.trim(),
       coverImage: form.coverImage.trim() || undefined,
     })
     setSaving(false)
@@ -384,16 +386,17 @@ function LoyaltySection() {
 
 // ── Orders Section ────────────────────────────────────────────────────────────
 function OrdersSection({
-  stores, orders, onUpdateOrderStatus,
+  stores, orders, onUpdateOrderStatus, defaultStoreId,
 }: {
   stores: Store[]
   orders: Order[]
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void
+  defaultStoreId?: number
 }) {
   const [loading,      setLoading]      = useState(false)
   const [dbOrders,     setDbOrders]     = useState<Order[]>([])
   const [loaded,       setLoaded]       = useState(false)
-  const [filterStoreId, setFilterStoreId] = useState<number | undefined>(undefined)
+  const [filterStoreId, setFilterStoreId] = useState<number | undefined>(defaultStoreId)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -419,6 +422,11 @@ function OrdersSection({
     await apiUpdateOrderStatus(orderId, status)
   }, [onUpdateOrderStatus])
 
+  const handleDeleteOrder = useCallback(async (orderId: string) => {
+    await apiDeleteOrder(orderId)
+    setDbOrders(prev => prev.filter(o => o.id !== orderId))
+  }, [])
+
   return (
     <section aria-label="Pedidos recentes" style={{
       borderRadius: 'var(--shape-xl)', border: '1px solid var(--md-outline-variant)',
@@ -443,7 +451,7 @@ function OrdersSection({
       {loading ? (
         <p className="text-sm text-center py-6" style={{ color: 'var(--md-on-surface-variant)' }}>Carregando...</p>
       ) : (
-        <OrderStatusPanel orders={merged} onUpdateStatus={handleUpdateStatus} />
+        <OrderStatusPanel orders={merged} onUpdateStatus={handleUpdateStatus} onDeleteOrder={handleDeleteOrder} />
       )}
     </section>
   )
@@ -451,11 +459,12 @@ function OrdersSection({
 
 // ── Admin principal ──────────────────────────────────────────────────────────
 export default function Admin({
-  stores, orders, onToggleStore, onAddStore, onUpdateStore,
+  authUser, stores, orders, onToggleStore, onAddStore, onUpdateStore,
   onAddProduct, onUpdateProduct, onDeleteProduct, onDeleteStore,
   onUpdateOrderStatus, onLogout,
 }: AdminProps) {
-  const [logged, setLogged] = useState(() => localStorage.getItem('pj_admin_logged') === '1')
+  const isSuperAdmin = authUser?.role === 'superadmin'
+
   const [storeForm,   setStoreForm]   = useState<StoreForm>(emptyStoreForm())
   const [productForm, setProductForm] = useState<ProductForm>(emptyProductForm(stores[0]?.id ?? 0))
   const [showStoreForm,   setShowStoreForm]   = useState(false)
@@ -478,7 +487,6 @@ export default function Admin({
     setStoreForm(emptyStoreForm()); setShowStoreForm(false)
   }, [storeForm, onAddStore])
 
-  // salvar novo produto — inclui ofertaDia e ofertaPreco
   const handleSaveProduct = useCallback(() => {
     const { storeId, name, description, price, section, image, ofertaDia, ofertaPreco } = productForm
     const parsedPrice = parseFloat(price)
@@ -496,19 +504,17 @@ export default function Admin({
 
   const handleLogout = useCallback(async () => {
     if (isSupabaseConfigured()) await getSupabase().auth.signOut()
-    localStorage.removeItem('pj_admin_logged')
-    setLogged(false); onLogout()
+    onLogout()
   }, [onLogout])
 
-  if (!logged) return (
-    <LoginForm onLogin={() => {
-      localStorage.setItem('pj_admin_logged', '1')
-      setLogged(true)
-    }} />
-  )
+  // Enquanto não está autenticado, mostra o formulário de login
+  if (!authUser) return <LoginForm onLogin={() => {}} />
 
   const totalProducts = stores.reduce((sum, s) => sum + s.products.length, 0)
   const openStores    = stores.filter(s => s.status === 'open').length
+
+  // Para comerciante com 1 loja, pré-filtra os pedidos nessa loja
+  const defaultOrderStoreId = !isSuperAdmin && stores.length === 1 ? stores[0].id : undefined
 
   const sectionStyle: React.CSSProperties = {
     borderRadius: 'var(--shape-xl)', border: '1px solid var(--md-outline-variant)',
@@ -543,33 +549,61 @@ export default function Admin({
           onCancel={() => setConfirmDeleteStore(null)} />
       )}
 
+      {/* Cabeçalho do painel */}
+      <div className="flex items-center gap-3 px-1">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+          style={{ background: isSuperAdmin ? 'linear-gradient(135deg,#7A2F00,#E85D26)' : 'var(--md-secondary-container)' }}>
+          {isSuperAdmin ? '👑' : '🏪'}
+        </div>
+        <div>
+          <p className="font-black text-base" style={{ color: 'var(--md-on-surface)', fontFamily: 'Google Sans Display,sans-serif' }}>
+            {isSuperAdmin ? 'Superadmin' : (stores[0]?.name ?? 'Meu Painel')}
+          </p>
+          <p className="text-xs" style={{ color: 'var(--md-on-surface-variant)' }}>
+            {isSuperAdmin ? 'Visão geral de todos os comércios' : 'Gerencie sua loja e pedidos'}
+          </p>
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
         {[
-          { label: 'Comércios', value: stores.length },
+          { label: isSuperAdmin ? 'Comércios' : 'Produtos', value: isSuperAdmin ? stores.length : totalProducts },
           { label: 'Abertos agora', value: openStores },
-          { label: 'Produtos', value: totalProducts },
+          { label: isSuperAdmin ? 'Produtos' : 'Loja', value: isSuperAdmin ? totalProducts : (stores[0]?.name ?? '—') },
           { label: 'Fechados', value: stores.length - openStores },
         ].map(stat => (
           <div key={stat.label} className="p-4 text-center" style={{ ...sectionStyle, padding: '16px' }}>
-            <p className="text-3xl font-black" style={{ color: 'var(--md-primary)', fontFamily: 'Google Sans Display, sans-serif' }}>{stat.value}</p>
+            <p className="text-2xl font-black truncate" style={{ color: 'var(--md-primary)', fontFamily: 'Google Sans Display, sans-serif' }}>{stat.value}</p>
             <p className="text-xs font-semibold mt-1" style={{ color: 'var(--md-on-surface-variant)' }}>{stat.label}</p>
           </div>
         ))}
       </div>
 
-      {/* ✅ Bug 1 corrigido — painel de pedidos recentes */}
-      <OrdersSection stores={stores} orders={orders} onUpdateOrderStatus={onUpdateOrderStatus} />
+      {/* Pedidos */}
+      <OrdersSection
+        stores={stores}
+        orders={orders}
+        onUpdateOrderStatus={onUpdateOrderStatus}
+        defaultStoreId={defaultOrderStoreId}
+      />
 
-      <LoyaltySection />
+      {/* Fidelidade — apenas superadmin */}
+      {isSuperAdmin && <LoyaltySection />}
 
       {/* Comércios */}
       <section style={sectionStyle} aria-label="Gerenciar comércios">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>🏪 Comércios</h2>
-          <button onClick={() => setShowStoreForm(v => !v)} className="btn-primary py-1.5 px-4 text-xs">+ Novo</button>
+          <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>
+            🏪 {isSuperAdmin ? 'Comércios' : 'Minha Loja'}
+          </h2>
+          {isSuperAdmin && (
+            <button onClick={() => setShowStoreForm(v => !v)} className="btn-primary py-1.5 px-4 text-xs">+ Novo</button>
+          )}
         </div>
-        {showStoreForm && (
+
+        {/* Formulário de novo comércio — apenas superadmin */}
+        {isSuperAdmin && showStoreForm && (
           <div className="space-y-3 mb-4" style={formBgStyle}>
             <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Novo comércio</p>
             <input className="form-input w-full" placeholder="Nome *" value={storeForm.name}
@@ -604,6 +638,7 @@ export default function Admin({
             </div>
           </div>
         )}
+
         <div className="space-y-3">
           {stores.map(store => (
             <div key={store.id} className="flex items-center gap-3">
@@ -625,11 +660,14 @@ export default function Admin({
                 style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
                 Editar
               </button>
-              <button onClick={() => setConfirmDeleteStore({ storeId: store.id, name: store.name })}
-                className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
-                style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>
-                Remover
-              </button>
+              {/* Remover comércio — apenas superadmin */}
+              {isSuperAdmin && (
+                <button onClick={() => setConfirmDeleteStore({ storeId: store.id, name: store.name })}
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
+                  style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>
+                  Remover
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -644,10 +682,17 @@ export default function Admin({
         {showProductForm && (
           <div className="space-y-3 mb-4" style={formBgStyle}>
             <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Novo produto</p>
-            <select className="form-input w-full" value={productForm.storeId}
-              onChange={e => setProductForm(p => ({ ...p, storeId: Number(e.target.value) }))}>
-              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            {/* Seletor de loja — superadmin escolhe, comerciante já tem a sua */}
+            {isSuperAdmin ? (
+              <select className="form-input w-full" value={productForm.storeId}
+                onChange={e => setProductForm(p => ({ ...p, storeId: Number(e.target.value) }))}>
+                {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            ) : (
+              <p className="text-sm font-semibold px-1" style={{ color: 'var(--md-on-primary-container)' }}>
+                Loja: {stores[0]?.name ?? ''}
+              </p>
+            )}
             <input className="form-input w-full" placeholder="Nome do produto *" value={productForm.name}
               onChange={e => setProductForm(p => ({ ...p, name: e.target.value }))} />
             <input className="form-input w-full" placeholder="Descrição" value={productForm.description}
@@ -658,7 +703,6 @@ export default function Admin({
               <input className="form-input" placeholder="Seção (ex: Pizzas)" value={productForm.section}
                 onChange={e => setProductForm(p => ({ ...p, section: e.target.value }))} />
             </div>
-            {/* campo de oferta do dia */}
             <div className="flex items-center gap-3 py-1">
               <input type="checkbox" id="new-oferta-dia" checked={productForm.ofertaDia}
                 onChange={e => setProductForm(p => ({ ...p, ofertaDia: e.target.checked }))} />
@@ -687,7 +731,7 @@ export default function Admin({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm truncate" style={{ color: 'var(--md-on-surface)' }}>{product.name}</p>
                   <p className="text-xs" style={{ color: 'var(--md-on-surface-variant)' }}>
-                    {store.name} · {formatBRL(product.price)}
+                    {isSuperAdmin && `${store.name} · `}{formatBRL(product.price)}
                     {product.ofertaDia && (
                       <span style={{ color: '#E85D26', fontWeight: 700 }}>
                         {product.ofertaPreco ? ` → 🔥 oferta ${formatBRL(product.ofertaPreco)}` : ' → 🔥 Oferta do dia'}
