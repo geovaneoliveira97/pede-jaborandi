@@ -120,11 +120,12 @@ export default function Menu({
 
   const groups = useMemo(() => {
     const q = normalize(search)
+    const active = store.products.filter(p => p.active !== false)
     const filtered = q
-      ? store.products.filter(p =>
+      ? active.filter(p =>
           normalize(p.name).includes(q) || normalize(p.description ?? '').includes(q)
         )
-      : store.products
+      : active
     return groupBySection(filtered)
   }, [store.products, search])
 

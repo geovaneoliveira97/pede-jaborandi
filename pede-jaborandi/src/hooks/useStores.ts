@@ -30,6 +30,7 @@ function mapProduct(raw: Record<string, unknown>): Product {
     sizes:       Array.isArray(raw.sizes)  ? raw.sizes  as import('../types/types').PizzaSize[]  : undefined,
     crusts:      Array.isArray(raw.crusts) ? raw.crusts as import('../types/types').PizzaCrust[] : undefined,
     allowHalf:   raw.allow_half  != null ? (raw.allow_half as boolean) : undefined,
+    active:      raw.active !== false,
   }
 }
 

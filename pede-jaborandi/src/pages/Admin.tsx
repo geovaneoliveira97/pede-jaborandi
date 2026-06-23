@@ -8,7 +8,7 @@ import { formatBRL } from '../lib/format'
 import {
   getLoyaltyConfig, setLoyaltyActive, updateLoyaltyConfig, type LoyaltyConfig,
 } from '../lib/loyaltyApi'
-import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder } from '../lib/adminApi'
+import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder, apiToggleProduct, apiSaveOrder } from '../lib/adminApi'
 import ImageUpload from '../components/ImageUpload'
 import OrderStatusPanel from '../components/OrderStatusPanel'
 
@@ -26,6 +26,7 @@ export interface AdminProps {
   onUpdateStore:         (storeId: number, updates: Partial<Omit<Store, 'id' | 'products'>>) => Promise<void>
   onAddProduct:          (storeId: number, product: Omit<Product, 'id'>) => Promise<void>
   onUpdateProduct:       (storeId: number, productId: number, updates: Partial<Omit<Product, 'id'>>) => Promise<void>
+  onToggleProduct:       (storeId: number, productId: number, active: boolean) => Promise<void>
   onDeleteProduct:       (storeId: number, productId: number) => Promise<void>
   onDeleteStore:         (storeId: number) => Promise<void>
   onUpdateOrderStatus:   (orderId: string, status: OrderStatus) => void
@@ -37,10 +38,21 @@ interface StoreForm {
   phone: string; color: string; rating: string; deliveryTime: string; coverImage: string
 }
 
+interface PizzaSizeForm  { id: string; label: string; info: string; price: string }
+interface PizzaCrustForm { id: string; label: string; extra: string }
+
 interface ProductForm {
   storeId: number; name: string; description: string
   price: string; section: string; image: string; ofertaDia: boolean; ofertaPreco: string
+  isPizza: boolean; allowHalf: boolean
+  sizes: PizzaSizeForm[]; crusts: PizzaCrustForm[]
 }
+
+const DEFAULT_CRUSTS: PizzaCrustForm[] = [
+  { id: 'sem_borda', label: 'Sem borda',        extra: '0'  },
+  { id: 'trad',      label: 'Borda Tradicional', extra: '10' },
+  { id: 'vulcao',    label: 'Borda Vulcão',      extra: '20' },
+]
 
 const emptyStoreForm = (): StoreForm => ({
   name: '', category: CATEGORY_OPTIONS[0], description: '',
@@ -49,6 +61,7 @@ const emptyStoreForm = (): StoreForm => ({
 
 const emptyProductForm = (storeId = 0): ProductForm => ({
   storeId, name: '', description: '', price: '', section: '', image: '', ofertaDia: false, ofertaPreco: '',
+  isPizza: false, allowHalf: true, sizes: [], crusts: [],
 })
 
 // ── Confirm Dialog ───────────────────────────────────────────────────────────
@@ -150,28 +163,61 @@ function EditStoreModal({ store, onSave, onCancel }: {
 }
 
 // ── Edit Product Modal ───────────────────────────────────────────────────────
-// edição de produto — inclui ofertaDia e ofertaPreco
 function EditProductModal({ product, stores, onSave, onCancel }: {
   product: Product & { storeId: number }; stores: Store[]
   onSave: (updates: Partial<Omit<Product, 'id'>>) => Promise<void>; onCancel: () => void
 }) {
+  const isPizzaInit = product.productType === 'pizza' || (Array.isArray(product.sizes) && product.sizes.length > 0)
   const [form, setForm] = useState({
     name: product.name, description: product.description,
     price: String(product.price), section: product.section, image: product.image ?? '',
-    ofertaDia: product.ofertaDia ?? false, ofertaPreco: product.ofertaPreco != null ? String(product.ofertaPreco) : '',
+    ofertaDia: product.ofertaDia ?? false,
+    ofertaPreco: product.ofertaPreco != null ? String(product.ofertaPreco) : '',
+    isPizza: isPizzaInit,
+    allowHalf: product.allowHalf !== false,
+    sizes:  ((product.sizes  ?? []).map(s => ({ id: s.id, label: s.label, info: s.info ?? '', price: String(s.price) }))) as PizzaSizeForm[],
+    crusts: ((product.crusts ?? []).map(c => ({ id: c.id, label: c.label, extra: String(c.extra) }))) as PizzaCrustForm[],
   })
   const [saving, setSaving] = useState(false)
+
+  const enablePizza = (checked: boolean) =>
+    setForm(p => {
+      if (checked && p.sizes.length === 0)
+        return { ...p, isPizza: true, sizes: [{ id: 'trad', label: 'Tradicional', info: 'Pizza grande', price: p.price }], crusts: DEFAULT_CRUSTS }
+      return { ...p, isPizza: checked }
+    })
+
+  const addSize    = () => setForm(p => ({ ...p, sizes: [...p.sizes, { id: '', label: '', info: '', price: '' }] }))
+  const removeSize = (i: number) => setForm(p => ({ ...p, sizes: p.sizes.filter((_, idx) => idx !== i) }))
+  const updateSize = (i: number, field: keyof PizzaSizeForm, val: string) =>
+    setForm(p => ({ ...p, sizes: p.sizes.map((s, idx) => idx === i ? { ...s, [field]: val } : s) }))
+
+  const addCrust    = () => setForm(p => ({ ...p, crusts: [...p.crusts, { id: '', label: '', extra: '0' }] }))
+  const removeCrust = (i: number) => setForm(p => ({ ...p, crusts: p.crusts.filter((_, idx) => idx !== i) }))
+  const updateCrust = (i: number, field: keyof PizzaCrustForm, val: string) =>
+    setForm(p => ({ ...p, crusts: p.crusts.map((c, idx) => idx === i ? { ...c, [field]: val } : c) }))
 
   const handleSave = useCallback(async () => {
     const price = parseFloat(form.price)
     if (!form.name.trim() || isNaN(price) || price <= 0) return
     const ofertaPreco = form.ofertaPreco.trim() ? parseFloat(form.ofertaPreco) : undefined
+
+    const pizzaFields: Partial<Omit<Product, 'id'>> = form.isPizza ? {
+      productType: 'pizza', allowHalf: form.allowHalf,
+      sizes:  form.sizes.filter(s => s.label.trim() && s.price.trim())
+                .map(s => ({ id: s.id || s.label.toLowerCase().replace(/\s+/g, '_'), label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
+      crusts: form.crusts.filter(c => c.label.trim())
+                .map(c => ({ id: c.id || c.label.toLowerCase().replace(/\s+/g, '_'), label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
+    } : { productType: 'item', allowHalf: false, sizes: undefined, crusts: undefined }
+
     setSaving(true)
     await onSave({
       name: form.name.trim(), description: form.description.trim(),
       price, section: form.section.trim() || 'Produtos',
       image: form.image.trim() || undefined,
-      ofertaDia: form.ofertaDia, ofertaPreco: ofertaPreco != null && !isNaN(ofertaPreco) && ofertaPreco > 0 ? ofertaPreco : undefined,
+      ofertaDia: form.ofertaDia,
+      ofertaPreco: ofertaPreco != null && !isNaN(ofertaPreco) && ofertaPreco > 0 ? ofertaPreco : undefined,
+      ...pizzaFields,
     })
     setSaving(false)
     onCancel()
@@ -179,11 +225,13 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
 
   const storeName = stores.find(s => s.id === product.storeId)?.name ?? ''
 
+  const pizzaBg: React.CSSProperties = { background: 'var(--md-primary-container)', borderRadius: 'var(--shape-xl)', padding: '16px' }
+
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="w-full max-w-lg p-6 space-y-3"
-        style={{ background: 'var(--md-surface-lowest)', borderRadius: 'var(--shape-xl) var(--shape-xl) 0 0', boxShadow: 'var(--md-elev-3)' }}>
+      <div className="w-full max-w-lg p-6 space-y-3 overflow-y-auto"
+        style={{ background: 'var(--md-surface-lowest)', borderRadius: 'var(--shape-xl) var(--shape-xl) 0 0', boxShadow: 'var(--md-elev-3)', maxHeight: '92vh' }}>
         <p className="text-sm font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>
           ✏️ Editar produto · {storeName}
         </p>
@@ -197,6 +245,7 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
           <input className="form-input" placeholder="Seção (ex: Pizzas)" value={form.section}
             onChange={e => setForm(p => ({ ...p, section: e.target.value }))} />
         </div>
+        {/* Oferta */}
         <div className="flex items-center gap-3 py-1">
           <input type="checkbox" id="edit-oferta-dia" checked={form.ofertaDia}
             onChange={e => setForm(p => ({ ...p, ofertaDia: e.target.checked }))} />
@@ -205,13 +254,68 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
           </label>
         </div>
         {form.ofertaDia && (
-          <>
-            <input className="form-input w-full" placeholder="Preço em oferta (ex: 9.90)" type="number" step="0.01" min="0"
-              value={form.ofertaPreco} onChange={e => setForm(p => ({ ...p, ofertaPreco: e.target.value }))} />
-            <p className="text-[11px]" style={{ color: 'var(--md-on-surface-variant)' }}>
-              💡 Aparece riscado na vitrine com o preço original.
-            </p>
-          </>
+          <input className="form-input w-full" placeholder="Preço em oferta (ex: 9.90)" type="number" step="0.01" min="0"
+            value={form.ofertaPreco} onChange={e => setForm(p => ({ ...p, ofertaPreco: e.target.value }))} />
+        )}
+        {/* Toggle pizza */}
+        <div className="flex items-center gap-3 py-1">
+          <input type="checkbox" id="edit-is-pizza" checked={form.isPizza}
+            onChange={e => enablePizza(e.target.checked)} />
+          <label htmlFor="edit-is-pizza" className="text-sm font-semibold" style={{ color: 'var(--md-on-surface)' }}>
+            🍕 É uma pizza (modal de borda e sabores)
+          </label>
+        </div>
+        {/* Configuração pizza */}
+        {form.isPizza && (
+          <div className="space-y-4" style={pizzaBg}>
+            <div className="flex items-center gap-3">
+              <input type="checkbox" id="edit-allow-half" checked={form.allowHalf}
+                onChange={e => setForm(p => ({ ...p, allowHalf: e.target.checked }))} />
+              <label htmlFor="edit-allow-half" className="text-sm font-semibold" style={{ color: 'var(--md-on-primary-container)' }}>
+                🍕½ Permite metade/metade (dois sabores)
+              </label>
+            </div>
+            {/* Tamanhos */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Tamanhos</p>
+                <button onClick={addSize} className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
+                  + Tamanho
+                </button>
+              </div>
+              {form.sizes.map((size, i) => (
+                <div key={i} className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 5rem auto' }}>
+                  <input className="form-input" placeholder="Nome (ex: Grande)" value={size.label}
+                    onChange={e => updateSize(i, 'label', e.target.value)} />
+                  <input className="form-input" placeholder="Preço" type="number" step="0.01" value={size.price}
+                    onChange={e => updateSize(i, 'price', e.target.value)} />
+                  <button onClick={() => removeSize(i)} className="px-2 rounded-lg text-xs font-bold"
+                    style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {/* Bordas */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Bordas</p>
+                <button onClick={addCrust} className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
+                  + Borda
+                </button>
+              </div>
+              {form.crusts.map((crust, i) => (
+                <div key={i} className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 5rem auto' }}>
+                  <input className="form-input" placeholder="Nome (ex: Sem borda)" value={crust.label}
+                    onChange={e => updateCrust(i, 'label', e.target.value)} />
+                  <input className="form-input" placeholder="+R$" type="number" step="0.50" min="0" value={crust.extra}
+                    onChange={e => updateCrust(i, 'extra', e.target.value)} />
+                  <button onClick={() => removeCrust(i)} className="px-2 rounded-lg text-xs font-bold"
+                    style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
         <ImageUpload label="Foto do produto" value={form.image}
           onChange={url => setForm(p => ({ ...p, image: url }))} folder="products" id={product.id} />
@@ -393,14 +497,13 @@ function OrdersSection({
   onUpdateOrderStatus: (orderId: string, status: OrderStatus) => void
   defaultStoreId?: number
 }) {
-  const [loading,      setLoading]      = useState(false)
-  const [dbOrders,     setDbOrders]     = useState<Order[]>([])
-  const [loaded,       setLoaded]       = useState(false)
+  const [loading,       setLoading]       = useState(false)
+  const [dbOrders,      setDbOrders]      = useState<Order[]>([])
+  const [loaded,        setLoaded]        = useState(false)
   const [filterStoreId, setFilterStoreId] = useState<number | undefined>(defaultStoreId)
-
   const load = useCallback(async () => {
     setLoading(true)
-    const { orders: data } = await apiGetRecentOrders(filterStoreId, 30)
+    const { orders: data } = await apiGetRecentOrders(filterStoreId, 50)
     setDbOrders(data)
     setLoaded(true)
     setLoading(false)
@@ -408,7 +511,39 @@ function OrdersSection({
 
   useEffect(() => { load() }, [load])
 
-  // Merge: pedidos do banco + pedidos da sessão atual (em memória)
+  // Realtime: escuta novos pedidos e toca som
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return
+    const channel = getSupabase()
+      .channel('admin-orders-rt')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>
+          if (filterStoreId && row.store_id !== filterStoreId) return
+const newOrder: Order = {
+            id:            String(row.id),
+            store_id:      row.store_id      as number,
+            storeName:     (row.store_name   as string) ?? '',
+            customerName:  row.customer_name  as string,
+            customerPhone: row.customer_phone as string,
+            address:       row.address        as string,
+            items:         row.items          as Order['items'],
+            total:         row.total          as number,
+            payment:       row.payment        as string,
+            discount:      row.discount       as number,
+            final_total:   row.final_total    as number,
+            status:        (row.status        as string ?? 'recebido') as Order['status'],
+            created_at:    row.created_at     as string,
+          }
+          setDbOrders(prev => [newOrder, ...prev])
+        }
+      )
+      .subscribe()
+    return () => { getSupabase().removeChannel(channel) }
+  }, [filterStoreId])
+
   const merged = loaded
     ? dbOrders.map(db => {
         const inMemory = orders.find(o => o.id === db.id)
@@ -427,6 +562,10 @@ function OrdersSection({
     setDbOrders(prev => prev.filter(o => o.id !== orderId))
   }, [])
 
+  const currentStoreName = filterStoreId
+    ? (stores.find(s => s.id === filterStoreId)?.name ?? '')
+    : (stores[0]?.name ?? '')
+
   return (
     <section aria-label="Pedidos recentes" style={{
       borderRadius: 'var(--shape-xl)', border: '1px solid var(--md-outline-variant)',
@@ -436,10 +575,12 @@ function OrdersSection({
         <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>
           🛵 Pedidos recentes
         </h2>
-        <button onClick={load} className="text-xs font-bold px-3 py-1.5 rounded-full"
-          style={{ background: 'var(--md-primary-container)', color: 'var(--md-on-primary-container)', border: 'none' }}>
-          ↺ Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={load} className="text-xs font-bold px-3 py-1.5 rounded-full"
+            style={{ background: 'var(--md-primary-container)', color: 'var(--md-on-primary-container)', border: 'none' }}>
+            ↺ Atualizar
+          </button>
+        </div>
       </div>
       {stores.length > 1 && (
         <select className="form-input w-full mb-3" value={filterStoreId ?? ''}
@@ -451,7 +592,12 @@ function OrdersSection({
       {loading ? (
         <p className="text-sm text-center py-6" style={{ color: 'var(--md-on-surface-variant)' }}>Carregando...</p>
       ) : (
-        <OrderStatusPanel orders={merged} onUpdateStatus={handleUpdateStatus} onDeleteOrder={handleDeleteOrder} />
+        <OrderStatusPanel
+          orders={merged}
+          storeName={currentStoreName}
+          onUpdateStatus={handleUpdateStatus}
+          onDeleteOrder={handleDeleteOrder}
+        />
       )}
     </section>
   )
@@ -460,7 +606,7 @@ function OrdersSection({
 // ── Admin principal ──────────────────────────────────────────────────────────
 export default function Admin({
   authUser, stores, orders, onToggleStore, onAddStore, onUpdateStore,
-  onAddProduct, onUpdateProduct, onDeleteProduct, onDeleteStore,
+  onAddProduct, onUpdateProduct, onToggleProduct, onDeleteProduct, onDeleteStore,
   onUpdateOrderStatus, onLogout,
 }: AdminProps) {
   const isSuperAdmin = authUser?.role === 'superadmin'
@@ -488,17 +634,27 @@ export default function Admin({
   }, [storeForm, onAddStore])
 
   const handleSaveProduct = useCallback(() => {
-    const { storeId, name, description, price, section, image, ofertaDia, ofertaPreco } = productForm
+    const { storeId, name, description, price, section, image, ofertaDia, ofertaPreco, isPizza, allowHalf, sizes, crusts } = productForm
     const parsedPrice = parseFloat(price)
     if (!name.trim() || isNaN(parsedPrice) || parsedPrice <= 0) return
     const parsedOfertaPreco = ofertaPreco.trim() ? parseFloat(ofertaPreco) : undefined
+
+    const pizzaFields: Partial<Omit<Product, 'id'>> = isPizza ? {
+      productType: 'pizza', allowHalf,
+      sizes:  sizes.filter(s => s.label.trim() && s.price.trim())
+                .map(s => ({ id: s.id || s.label.toLowerCase().replace(/\s+/g, '_'), label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
+      crusts: crusts.filter(c => c.label.trim())
+                .map(c => ({ id: c.id || c.label.toLowerCase().replace(/\s+/g, '_'), label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
+    } : { productType: 'item' }
+
     onAddProduct(storeId, {
       name: name.trim(), description: description.trim(), price: parsedPrice,
       section: section.trim() || 'Produtos', image: image.trim() || undefined,
       ofertaDia, ofertaPreco: parsedOfertaPreco != null && !isNaN(parsedOfertaPreco) && parsedOfertaPreco > 0
         ? parsedOfertaPreco : undefined,
+      ...pizzaFields,
     })
-    setProductForm(prev => ({ ...prev, name: '', description: '', price: '', section: '', image: '', ofertaDia: false, ofertaPreco: '' }))
+    setProductForm(prev => ({ ...prev, name: '', description: '', price: '', section: '', image: '', ofertaDia: false, ofertaPreco: '', isPizza: false, allowHalf: true, sizes: [], crusts: [] }))
     setShowProductForm(false)
   }, [productForm, onAddProduct])
 
@@ -714,6 +870,77 @@ export default function Admin({
               <input className="form-input w-full" placeholder="Preço em oferta (ex: 9.90)" type="number" step="0.01" min="0"
                 value={productForm.ofertaPreco} onChange={e => setProductForm(p => ({ ...p, ofertaPreco: e.target.value }))} />
             )}
+            {/* Toggle pizza */}
+            <div className="flex items-center gap-3 py-1">
+              <input type="checkbox" id="new-is-pizza" checked={productForm.isPizza}
+                onChange={e => {
+                  const checked = e.target.checked
+                  setProductForm(p => {
+                    if (checked && p.sizes.length === 0)
+                      return { ...p, isPizza: true, sizes: [{ id: 'trad', label: 'Tradicional', info: 'Pizza grande', price: p.price }], crusts: DEFAULT_CRUSTS }
+                    return { ...p, isPizza: checked }
+                  })
+                }} />
+              <label htmlFor="new-is-pizza" className="text-sm font-semibold" style={{ color: 'var(--md-on-primary-container)' }}>
+                🍕 É uma pizza (modal de borda e sabores)
+              </label>
+            </div>
+            {/* Configuração pizza */}
+            {productForm.isPizza && (
+              <div className="space-y-4 p-4 rounded-2xl" style={{ background: 'rgba(0,0,0,0.12)' }}>
+                <div className="flex items-center gap-3">
+                  <input type="checkbox" id="new-allow-half" checked={productForm.allowHalf}
+                    onChange={e => setProductForm(p => ({ ...p, allowHalf: e.target.checked }))} />
+                  <label htmlFor="new-allow-half" className="text-sm font-semibold" style={{ color: 'var(--md-on-primary-container)' }}>
+                    🍕½ Permite metade/metade (dois sabores)
+                  </label>
+                </div>
+                {/* Tamanhos */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Tamanhos</p>
+                    <button onClick={() => setProductForm(p => ({ ...p, sizes: [...p.sizes, { id: '', label: '', info: '', price: '' }] }))}
+                      className="text-xs font-bold px-3 py-1 rounded-full"
+                      style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
+                      + Tamanho
+                    </button>
+                  </div>
+                  {productForm.sizes.map((size, i) => (
+                    <div key={i} className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 5rem auto' }}>
+                      <input className="form-input" placeholder="Nome (ex: Grande)" value={size.label}
+                        onChange={e => setProductForm(p => ({ ...p, sizes: p.sizes.map((s, idx) => idx === i ? { ...s, label: e.target.value } : s) }))} />
+                      <input className="form-input" placeholder="Preço" type="number" step="0.01" value={size.price}
+                        onChange={e => setProductForm(p => ({ ...p, sizes: p.sizes.map((s, idx) => idx === i ? { ...s, price: e.target.value } : s) }))} />
+                      <button onClick={() => setProductForm(p => ({ ...p, sizes: p.sizes.filter((_, idx) => idx !== i) }))}
+                        className="px-2 rounded-lg text-xs font-bold"
+                        style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+                {/* Bordas */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Bordas</p>
+                    <button onClick={() => setProductForm(p => ({ ...p, crusts: [...p.crusts, { id: '', label: '', extra: '0' }] }))}
+                      className="text-xs font-bold px-3 py-1 rounded-full"
+                      style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
+                      + Borda
+                    </button>
+                  </div>
+                  {productForm.crusts.map((crust, i) => (
+                    <div key={i} className="grid gap-2 mb-2" style={{ gridTemplateColumns: '1fr 5rem auto' }}>
+                      <input className="form-input" placeholder="Nome (ex: Sem borda)" value={crust.label}
+                        onChange={e => setProductForm(p => ({ ...p, crusts: p.crusts.map((c, idx) => idx === i ? { ...c, label: e.target.value } : c) }))} />
+                      <input className="form-input" placeholder="+R$" type="number" step="0.50" min="0" value={crust.extra}
+                        onChange={e => setProductForm(p => ({ ...p, crusts: p.crusts.map((c, idx) => idx === i ? { ...c, extra: e.target.value } : c) }))} />
+                      <button onClick={() => setProductForm(p => ({ ...p, crusts: p.crusts.filter((_, idx) => idx !== i) }))}
+                        className="px-2 rounded-lg text-xs font-bold"
+                        style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <ImageUpload label="Foto do produto" value={productForm.image}
               onChange={url => setProductForm(p => ({ ...p, image: url }))} folder="temp" />
             <div className="flex gap-2">
@@ -740,6 +967,14 @@ export default function Admin({
                   </p>
                 </div>
                 <button
+                  role="switch" aria-checked={product.active !== false}
+                  onClick={() => onToggleProduct(store.id, product.id, product.active === false)}
+                  className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
+                  title={product.active !== false ? 'Pausar item (não aparece no cardápio)' : 'Ativar item'}
+                  style={{ background: product.active !== false ? '#dcfce7' : '#FEE2E2', color: product.active !== false ? '#16a34a' : '#dc2626', border: '1px solid var(--md-outline-variant)' }}>
+                  {product.active !== false ? '✅' : '⏸️'}
+                </button>
+                <button
                   role="switch" aria-checked={product.ofertaDia}
                   onClick={() => onUpdateProduct(store.id, product.id, { ofertaDia: !product.ofertaDia })}
                   className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
@@ -765,10 +1000,248 @@ export default function Admin({
         </div>
       </section>
 
+      {/* ── Relatórios ─────────────────────────────────────────── */}
+      <ReportsSection stores={stores} defaultStoreId={defaultOrderStoreId} sectionStyle={sectionStyle} />
+
+      {/* ── PDV ────────────────────────────────────────────────── */}
+      <PDVSection stores={stores} isSuperAdmin={isSuperAdmin} sectionStyle={sectionStyle} formBgStyle={formBgStyle} />
+
       <button onClick={handleLogout} className="w-full py-3 text-sm font-bold rounded-full transition-colors"
         style={{ border: '1px solid var(--md-outline-variant)', color: 'var(--md-on-surface-variant)', background: 'none' }}>
         Sair do painel
       </button>
     </div>
+  )
+}
+
+// ── Relatórios ────────────────────────────────────────────────────────────────
+function ReportsSection({ stores, defaultStoreId, sectionStyle }: {
+  stores: Store[]; defaultStoreId?: number; sectionStyle: React.CSSProperties
+}) {
+  const [orders,  setOrders]  = useState<Order[]>([])
+  const [loading, setLoading] = useState(false)
+  const [storeId, setStoreId] = useState<number | undefined>(defaultStoreId)
+
+  useEffect(() => {
+    setLoading(true)
+    apiGetRecentOrders(storeId, 200).then(({ orders: data }) => {
+      setOrders(data); setLoading(false)
+    })
+  }, [storeId])
+
+  const tzOpt = { timeZone: 'America/Sao_Paulo' } as const
+  const todayStr = new Date().toLocaleDateString('pt-BR', tzOpt)
+  const weekAgo  = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
+  const monthAgo = new Date(); monthAgo.setDate(monthAgo.getDate() - 30)
+
+  const todayOrders = orders.filter(o =>
+    new Date(o.created_at).toLocaleDateString('pt-BR', tzOpt) === todayStr
+  )
+  const weekOrders  = orders.filter(o => new Date(o.created_at) >= weekAgo)
+  const monthOrders = orders.filter(o => new Date(o.created_at) >= monthAgo)
+
+  const topProducts = Object.values(
+    orders.flatMap(o => o.items).reduce<Record<string, { name: string; qty: number; total: number }>>((acc, item) => {
+      if (!acc[item.name]) acc[item.name] = { name: item.name, qty: 0, total: 0 }
+      acc[item.name].qty   += item.qty
+      acc[item.name].total += item.price * item.qty
+      return acc
+    }, {})
+  ).sort((a, b) => b.qty - a.qty).slice(0, 5)
+
+  const stat = (label: string, count: number, total: number) => (
+    <div className="rounded-xl p-3 text-center" style={{ background: 'var(--md-surface-high)' }}>
+      <p className="text-xl font-black" style={{ color: 'var(--md-primary)' }}>{count}</p>
+      <p className="text-[10px] font-bold" style={{ color: 'var(--md-on-surface-variant)' }}>{label}</p>
+      <p className="text-xs font-semibold mt-0.5" style={{ color: 'var(--md-on-surface)' }}>{formatBRL(total)}</p>
+    </div>
+  )
+
+  return (
+    <section style={sectionStyle} aria-label="Relatórios">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>
+          📊 Relatórios
+        </h2>
+        {stores.length > 1 && (
+          <select className="form-input text-xs py-1" value={storeId ?? ''}
+            onChange={e => setStoreId(e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">Todos</option>
+            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        )}
+      </div>
+      {loading ? (
+        <p className="text-sm text-center py-4" style={{ color: 'var(--md-on-surface-variant)' }}>Calculando...</p>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {stat('Hoje',   todayOrders.length, todayOrders.reduce((s, o) => s + o.final_total, 0))}
+            {stat('7 dias', weekOrders.length,  weekOrders.reduce((s, o) => s + o.final_total, 0))}
+            {stat('30 dias',monthOrders.length, monthOrders.reduce((s, o) => s + o.final_total, 0))}
+          </div>
+          {topProducts.length > 0 && (
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--md-on-surface-variant)' }}>
+                🏆 Mais vendidos (30 dias)
+              </p>
+              {topProducts.map((p, i) => (
+                <div key={p.name} className="flex items-center justify-between py-1.5 border-b last:border-0"
+                  style={{ borderColor: 'var(--md-outline-variant)' }}>
+                  <span className="text-sm" style={{ color: 'var(--md-on-surface)' }}>
+                    <span className="font-black mr-2" style={{ color: 'var(--md-primary)' }}>#{i + 1}</span>
+                    {p.name}
+                  </span>
+                  <span className="text-xs font-bold" style={{ color: 'var(--md-on-surface-variant)' }}>
+                    {p.qty}x · {formatBRL(p.total)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+// ── PDV — Lançar Pedido Manual ────────────────────────────────────────────────
+interface PDVItem { productId: number; name: string; price: number; qty: number }
+
+function PDVSection({ stores, isSuperAdmin, sectionStyle, formBgStyle }: {
+  stores: Store[]; isSuperAdmin: boolean
+  sectionStyle: React.CSSProperties; formBgStyle: React.CSSProperties
+}) {
+  const [open,      setOpen]      = useState(false)
+  const [storeId,   setStoreId]   = useState(stores[0]?.id ?? 0)
+  const [items,     setItems]     = useState<PDVItem[]>([])
+  const [name,      setName]      = useState('')
+  const [phone,     setPhone]     = useState('')
+  const [address,   setAddress]   = useState('')
+  const [retirada,  setRetirada]  = useState(false)
+  const [payment,   setPayment]   = useState('dinheiro')
+  const [saving,    setSaving]    = useState(false)
+  const [success,   setSuccess]   = useState(false)
+
+  const store = stores.find(s => s.id === storeId) ?? stores[0]
+  const activeProducts = (store?.products ?? []).filter(p => p.active !== false)
+
+  const addItem = (product: Product) => {
+    setItems(prev => {
+      const ex = prev.find(i => i.productId === product.id)
+      if (ex) return prev.map(i => i.productId === product.id ? { ...i, qty: i.qty + 1 } : i)
+      return [...prev, { productId: product.id, name: product.name, price: product.price, qty: 1 }]
+    })
+  }
+
+  const removeItem = (productId: number) =>
+    setItems(prev => prev.map(i => i.productId === productId ? { ...i, qty: i.qty - 1 } : i).filter(i => i.qty > 0))
+
+  const total = items.reduce((s, i) => s + i.price * i.qty, 0)
+
+  const handleSubmit = useCallback(async () => {
+    if (!name.trim() || items.length === 0) return
+    setSaving(true)
+    await apiSaveOrder({
+      storeId:       store!.id,
+      storeName:     store!.name,
+      customerName:  name.trim(),
+      customerPhone: phone.replace(/\D/g, ''),
+      address:       retirada ? 'Retirada no local' : address.trim(),
+      items:         items.map(i => ({ productId: i.productId, name: i.name, price: i.price, qty: i.qty })),
+      total,
+      payment,
+      discount:      0,
+      finalTotal:    total,
+    })
+    setSaving(false)
+    setSuccess(true)
+    setItems([]); setName(''); setPhone(''); setAddress('')
+    setTimeout(() => setSuccess(false), 3000)
+  }, [name, phone, address, retirada, payment, items, total, store])
+
+  return (
+    <section style={sectionStyle} aria-label="PDV">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>
+          🖥️ PDV — Lançar Pedido
+        </h2>
+        <button onClick={() => setOpen(v => !v)} className="btn-primary py-1.5 px-4 text-xs">
+          {open ? 'Fechar' : '+ Pedido'}
+        </button>
+      </div>
+      {success && (
+        <p className="text-sm font-bold text-center py-2 rounded-xl mb-3" style={{ background: '#dcfce7', color: '#16a34a' }}>
+          ✅ Pedido lançado com sucesso!
+        </p>
+      )}
+      {open && (
+        <div className="space-y-3" style={formBgStyle}>
+          {isSuperAdmin && stores.length > 1 && (
+            <select className="form-input w-full" value={storeId}
+              onChange={e => { setStoreId(Number(e.target.value)); setItems([]) }}>
+              {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          )}
+          {/* Itens */}
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>
+            Produtos
+          </p>
+          <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+            {activeProducts.map(p => {
+              const inCart = items.find(i => i.productId === p.id)
+              return (
+                <div key={p.id} className="flex items-center justify-between py-1.5 rounded-lg px-2"
+                  style={{ background: inCart ? 'rgba(0,0,0,0.08)' : 'transparent' }}>
+                  <span className="text-xs font-semibold flex-1 truncate" style={{ color: 'var(--md-on-primary-container)' }}>
+                    {p.name} · {formatBRL(p.price)}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {inCart && (
+                      <>
+                        <button onClick={() => removeItem(p.id)} className="w-6 h-6 rounded-full font-bold text-sm flex items-center justify-center"
+                          style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>−</button>
+                        <span className="text-xs font-bold w-4 text-center" style={{ color: 'var(--md-on-primary-container)' }}>{inCart.qty}</span>
+                      </>
+                    )}
+                    <button onClick={() => addItem(p)} className="w-6 h-6 rounded-full font-bold text-sm flex items-center justify-center"
+                      style={{ background: 'var(--md-primary)', color: '#fff', border: 'none' }}>+</button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {items.length > 0 && (
+            <p className="text-sm font-black text-right" style={{ color: 'var(--md-on-primary-container)' }}>
+              Total: {formatBRL(total)}
+            </p>
+          )}
+          {/* Cliente */}
+          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>
+            Cliente
+          </p>
+          <input className="form-input w-full" placeholder="Nome *" value={name} onChange={e => setName(e.target.value)} />
+          <input className="form-input w-full" placeholder="Telefone" type="tel" value={phone} onChange={e => setPhone(e.target.value)} />
+          <div className="flex items-center gap-3">
+            <input type="checkbox" id="pdv-retirada" checked={retirada} onChange={e => setRetirada(e.target.checked)} />
+            <label htmlFor="pdv-retirada" className="text-sm font-semibold" style={{ color: 'var(--md-on-primary-container)' }}>
+              🏃 Retirada no local
+            </label>
+          </div>
+          {!retirada && (
+            <input className="form-input w-full" placeholder="Endereço de entrega" value={address} onChange={e => setAddress(e.target.value)} />
+          )}
+          <select className="form-input w-full" value={payment} onChange={e => setPayment(e.target.value)}>
+            <option value="dinheiro">💵 Dinheiro</option>
+            <option value="pix">📱 Pix</option>
+            <option value="cartao">💳 Cartão na entrega</option>
+          </select>
+          <button onClick={handleSubmit} disabled={saving || !name.trim() || items.length === 0}
+            className="btn-primary w-full py-2.5 text-sm disabled:opacity-50">
+            {saving ? 'Salvando...' : `🛒 Lançar pedido · ${formatBRL(total)}`}
+          </button>
+        </div>
+      )}
+    </section>
   )
 }

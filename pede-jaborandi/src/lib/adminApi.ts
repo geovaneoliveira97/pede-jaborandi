@@ -81,6 +81,11 @@ export async function apiAddProduct(
       price: product.price, section: product.section, image: product.image ?? null,
       oferta_dia:   product.ofertaDia   ?? false,
       oferta_preco: product.ofertaPreco ?? null,
+      product_type: product.productType ?? 'item',
+      allow_half:   product.allowHalf   ?? false,
+      sizes:        product.sizes       ?? null,
+      crusts:       product.crusts      ?? null,
+      active:       product.active      ?? true,
     })
     .select('id').single()
   if (error) return { id: null, error: friendlyError(error.message) }
@@ -97,9 +102,22 @@ export async function apiUpdateProduct(
   if (updates.price       !== undefined) payload.price        = updates.price
   if (updates.section     !== undefined) payload.section      = updates.section
   if (updates.image       !== undefined) payload.image        = updates.image ?? null
-  if (updates.ofertaDia   !== undefined) payload.oferta_dia   = updates.ofertaDia
-  if (updates.ofertaPreco !== undefined) payload.oferta_preco = updates.ofertaPreco ?? null
+  if (updates.ofertaDia    !== undefined) payload.oferta_dia   = updates.ofertaDia
+  if (updates.ofertaPreco  !== undefined) payload.oferta_preco = updates.ofertaPreco ?? null
+  if ('productType' in updates)           payload.product_type = updates.productType ?? 'item'
+  if ('allowHalf'   in updates)           payload.allow_half   = updates.allowHalf   ?? false
+  if ('sizes'       in updates)           payload.sizes        = updates.sizes        ?? null
+  if ('crusts'      in updates)           payload.crusts       = updates.crusts       ?? null
+  if ('active'      in updates)           payload.active       = updates.active       ?? true
   const { error } = await getSupabase().from('products').update(payload).eq('id', productId)
+  return { error: error ? friendlyError(error.message) : null }
+}
+
+export async function apiToggleProduct(
+  productId: number, active: boolean
+): Promise<{ error: string | null }> {
+  if (!isSupabaseConfigured()) return { error: null }
+  const { error } = await getSupabase().from('products').update({ active }).eq('id', productId)
   return { error: error ? friendlyError(error.message) : null }
 }
 

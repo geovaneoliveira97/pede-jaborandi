@@ -9,7 +9,7 @@ import { useInstallPrompt } from './hooks/useInstallPrompt'
 import {
   apiAddStore, apiUpdateStore,
   apiToggleStore,
-  apiAddProduct, apiUpdateProduct,
+  apiAddProduct, apiUpdateProduct, apiToggleProduct,
   apiDeleteProduct, apiDeleteStore,
 } from './lib/adminApi'
 import { resolveRole, type AuthUser } from './lib/auth'
@@ -20,7 +20,6 @@ import BottomNav     from './components/BottomNav'
 import InstallBanner from './components/InstallBanner'
 import Toast         from './components/Toast'
 import { SkeletonHome, ErrorScreen } from './components/LoadingScreen'
-import QuickRating from './components/QuickRating'
 
 import Home     from './pages/Home'
 import Menu     from './pages/Menu'
@@ -53,8 +52,7 @@ export default function App() {
   const [currentStore, setCurrentStore] = useState<Store | null>(null)
   const [localStores,  setLocalStores]  = useState<Store[] | null>(null)
   const [orders,       setOrders]       = useState<Order[]>([])
-  const [quickRating,  setQuickRating]  = useState<{ storeName: string } | null>(null)
-  const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
+const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
 
   const { stores: fetchedStores, loading, error, retry } = useStores()
 
@@ -111,13 +109,8 @@ export default function App() {
   }, [navigateTo])
 
   const handleOrderSuccess = useCallback(() => {
-    const storeName = currentStore?.name ?? ''
     clearCart()
     navigateTo('home')
-    // Exibe avaliação rápida após pequeno delay para a navegação completar
-    if (storeName) {
-      setTimeout(() => setQuickRating({ storeName }), 600)
-    }
   }, [clearCart, navigateTo, currentStore])
 
   const handleUpdateOrderStatus = useCallback((orderId: string, status: OrderStatus) => {
@@ -182,6 +175,17 @@ export default function App() {
         : s
     ))
     showToast('✓ Produto atualizado!')
+  }, [fetchedStores, showToast])
+
+  const handleToggleProduct = useCallback(async (storeId: number, productId: number, active: boolean) => {
+    const { error: err } = await apiToggleProduct(productId, active)
+    if (err) { showToast('Erro ao pausar produto'); return }
+    setLocalStores(prev => (prev ?? fetchedStores).map(s =>
+      s.id === storeId
+        ? { ...s, products: s.products.map(p => p.id === productId ? { ...p, active } : p) }
+        : s
+    ))
+    showToast(active ? '✅ Produto ativado' : '⏸️ Produto pausado')
   }, [fetchedStores, showToast])
 
   const handleDeleteProduct = useCallback(async (storeId: number, productId: number) => {
@@ -286,6 +290,7 @@ export default function App() {
               onUpdateStore={handleUpdateStore}
               onAddProduct={handleAddProduct}
               onUpdateProduct={handleUpdateProduct}
+              onToggleProduct={handleToggleProduct}
               onDeleteProduct={handleDeleteProduct}
               onDeleteStore={handleDeleteStore}
               onUpdateOrderStatus={handleUpdateOrderStatus}
@@ -298,14 +303,7 @@ export default function App() {
       <BottomNav view={view} onNavigate={navigateTo} cartCount={totalItems} />
       <Toast message={toastMsg} visible={toastVisible} />
 
-      {/* Avaliação rápida pós-pedido */}
-      {quickRating && (
-        <QuickRating
-          storeName={quickRating.storeName}
-          onRate={() => setQuickRating(null)}
-          onClose={() => setQuickRating(null)}
-        />
-      )}
+
     </div>
   )
 }

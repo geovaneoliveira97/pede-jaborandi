@@ -58,6 +58,7 @@ export interface Product {
   sizes?:       PizzaSize[]    // tamanhos disponíveis (Grande, Broto...)
   crusts?:      PizzaCrust[]   // opções de borda
   allowHalf?:   boolean        // permite metade/metade (padrão true para pizzas)
+  active?:      boolean        // false = pausado (não aparece no cardápio)
 }
 
 // ── Loja ───────────────────────────────────────────────────────────────────

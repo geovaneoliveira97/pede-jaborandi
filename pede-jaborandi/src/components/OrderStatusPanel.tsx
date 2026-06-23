@@ -5,11 +5,13 @@ import type { Order, OrderStatus } from '../types/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW } from '../types/types'
 import { buildStatusMessage, openWhatsApp } from '../lib/whatsapp'
 import { formatBRL } from '../lib/format'
+import { printOrder } from '../lib/printOrder'
 
 type FilterTab = 'ativos' | 'todos' | 'entregues'
 
 interface OrderStatusPanelProps {
   orders:         Order[]
+  storeName?:     string
   onUpdateStatus: (orderId: string, status: OrderStatus) => void
   onDeleteOrder:  (orderId: string) => void
 }
@@ -62,7 +64,7 @@ function groupByDay(orders: Order[]) {
     .map(([dateStr, list]) => ({ dateStr, label: dayLabel(dateStr), orders: list }))
 }
 
-export default function OrderStatusPanel({ orders, onUpdateStatus, onDeleteOrder }: OrderStatusPanelProps) {
+export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatus, onDeleteOrder }: OrderStatusPanelProps) {
   const [expanded,      setExpanded]      = useState<string | null>(null)
   const [tab,           setTab]           = useState<FilterTab>('ativos')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -252,6 +254,14 @@ export default function OrderStatusPanel({ orders, onUpdateStatus, onDeleteOrder
                         Avançar para: {ORDER_STATUS_LABELS[nextStatus]} →
                       </button>
                     )}
+
+                    {/* Imprimir */}
+                    <button
+                      onClick={() => printOrder(order, storeName || order.storeName)}
+                      className="w-full font-bold text-sm rounded-full py-2.5 mb-2"
+                      style={{ background: '#1e293b', color: '#fff', border: 'none', cursor: 'pointer' }}>
+                      🖨️ Imprimir cupom
+                    </button>
 
                     {/* Pedido entregue: mensagem + botão excluir */}
                     {order.status === 'entregue' && (
