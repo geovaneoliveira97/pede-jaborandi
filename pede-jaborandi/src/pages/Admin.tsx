@@ -8,7 +8,7 @@ import { formatBRL } from '../lib/format'
 import {
   getLoyaltyConfig, setLoyaltyActive, updateLoyaltyConfig, type LoyaltyConfig,
 } from '../lib/loyaltyApi'
-import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder, apiToggleProduct, apiSaveOrder } from '../lib/adminApi'
+import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder, apiSaveOrder } from '../lib/adminApi'
 import ImageUpload from '../components/ImageUpload'
 import OrderStatusPanel from '../components/OrderStatusPanel'
 
