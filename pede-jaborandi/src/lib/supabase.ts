@@ -33,6 +33,11 @@ export function getSupabase(): SupabaseClient {
     _client = createClient(
       import.meta.env.VITE_SUPABASE_URL      as string,
       import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+      {
+        realtime:  { params: { eventsPerSecond: -1 } },
+        global:    { headers: { 'x-client-info': 'pede-jaborandi' } },
+        auth:      { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      },
     )
   }
   return _client
