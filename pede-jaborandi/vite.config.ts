@@ -10,19 +10,10 @@ import react from '@vitejs/plugin-react'
 import { existsSync } from 'fs'
 import type { Plugin } from 'vite'
 
-// Converte <link rel="stylesheet"> gerado pelo Vite em preload não-bloqueante
+// Plugin vazio — CSS bloqueante é melhor neste caso porque o recálculo
+// de estilos após carregamento assíncrono custa mais que o bloqueio inicial de 150ms
 function htmlOptimizePlugin(): Plugin {
-  return {
-    name: 'html-optimize',
-    apply: 'build',
-    transformIndexHtml(html) {
-      return html.replace(
-        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
-        `<link rel="preload" as="style" href="$1" onload="this.onload=null;this.rel='stylesheet'">` +
-        `<noscript><link rel="stylesheet" href="$1"></noscript>`,
-      )
-    },
-  }
+  return { name: 'html-optimize', apply: 'build' }
 }
 
 export default defineConfig(({ mode }) => {
