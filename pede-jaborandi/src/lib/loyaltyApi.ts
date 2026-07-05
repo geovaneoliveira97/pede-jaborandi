@@ -90,7 +90,7 @@ export async function getPoints(phone: string): Promise<number> {
     .from('user_points')
     .select('points')
     .eq('phone', norm)
-    .single()
+    .maybeSingle()
 
   return data?.points ?? 0
 }

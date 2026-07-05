@@ -148,7 +148,7 @@ export async function apiSaveOrder(
   params: SaveOrderParams
 ): Promise<{ id: string | null; error: string | null }> {
   if (!isSupabaseConfigured()) return { id: String(Date.now()), error: null }
-  const { data, error } = await getSupabase()
+  const { error } = await getSupabase()
     .from('orders')
     .insert({
       store_id:       params.storeId,
@@ -163,9 +163,8 @@ export async function apiSaveOrder(
       final_total:    params.finalTotal,
       status:         'recebido',
     })
-    .select('id').single()
   if (error) return { id: null, error: error.message }
-  return { id: String(data.id), error: null }
+  return { id: null, error: null }
 }
 
 export async function apiGetRecentOrders(

@@ -21,14 +21,14 @@ import InstallBanner from './components/InstallBanner'
 import Toast         from './components/Toast'
 import { SkeletonHome, ErrorScreen } from './components/LoadingScreen'
 
-import Home     from './pages/Home'
-import Menu     from './pages/Menu'
-import Cart     from './pages/Cart'
-import Checkout from './pages/Checkout'
+import Home from './pages/Home'
 
-const Admin   = lazy(() => import('./pages/Admin'))
-const Points  = lazy(() => import('./pages/Points'))
-const Vitrine = lazy(() => import('./pages/Vitrine'))
+const Menu     = lazy(() => import('./pages/Menu'))
+const Cart     = lazy(() => import('./pages/Cart'))
+const Checkout = lazy(() => import('./pages/Checkout'))
+const Admin    = lazy(() => import('./pages/Admin'))
+const Points   = lazy(() => import('./pages/Points'))
+const Vitrine  = lazy(() => import('./pages/Vitrine'))
 
 const PAGE_TITLES: Record<AppView, string> = {
   home:     'Jaborandi – SP',
@@ -243,16 +243,18 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
           <Home stores={activeStores} onSelect={handleSelectStore} />
         )}
         {view === 'menu' && currentStore && (
-          <Menu
-            store={currentStore}
-            addItem={addItem}
-            clearCart={clearCart}
-            showToast={showToast}
-            cartItems={items}
-            cartTotal={totalPrice}
-            onChangeQty={changeQty}
-            onGoToCart={() => navigateTo('cart')}
-          />
+          <Suspense fallback={null}>
+            <Menu
+              store={currentStore}
+              addItem={addItem}
+              clearCart={clearCart}
+              showToast={showToast}
+              cartItems={items}
+              cartTotal={totalPrice}
+              onChangeQty={changeQty}
+              onGoToCart={() => navigateTo('cart')}
+            />
+          </Suspense>
         )}
         {view === 'vitrine' && currentStore && (
           <Suspense fallback={null}>
@@ -260,23 +262,27 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
           </Suspense>
         )}
         {view === 'cart' && (
-          <Cart
-            items={items}
-            stores={activeStores}
-            totalPrice={totalPrice}
-            onChangeQty={changeQty}
-            onCheckout={() => navigateTo('checkout')}
-            onGoHome={() => navigateTo('home')}
-          />
+          <Suspense fallback={null}>
+            <Cart
+              items={items}
+              stores={activeStores}
+              totalPrice={totalPrice}
+              onChangeQty={changeQty}
+              onCheckout={() => navigateTo('checkout')}
+              onGoHome={() => navigateTo('home')}
+            />
+          </Suspense>
         )}
         {view === 'checkout' && (
-          <Checkout
-            items={items}
-            stores={activeStores}
-            totalPrice={totalPrice}
-            onSuccess={handleOrderSuccess}
-            showToast={showToast}
-          />
+          <Suspense fallback={null}>
+            <Checkout
+              items={items}
+              stores={activeStores}
+              totalPrice={totalPrice}
+              onSuccess={handleOrderSuccess}
+              showToast={showToast}
+            />
+          </Suspense>
         )}
         {view === 'pontos' && <Suspense fallback={null}><Points /></Suspense>}
         {view === 'admin' && (

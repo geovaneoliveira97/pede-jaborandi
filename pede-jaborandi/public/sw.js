@@ -1,7 +1,4 @@
 const CACHE_NAME = 'pede-jaborandi-v4'
-const DATA_CACHE = 'pede-jaborandi-data-v3'
-const FONT_CACHE = 'pede-jaborandi-fonts-v3'
-
 const DATA_CACHE = 'pede-jaborandi-data-v4'
 const FONT_CACHE = 'pede-jaborandi-fonts-v4'
 
@@ -53,7 +50,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // clone() ANTES de qualquer uso — body só pode ser lido uma vez
           const toCache = response.clone()
           caches.open(CACHE_NAME).then(c => c.put(event.request, toCache))
           return response
@@ -69,7 +65,6 @@ self.addEventListener('fetch', event => {
       fetch(event.request)
         .then(response => {
           if (response.ok) {
-            // clone() antes de retornar — não depois
             const toCache = response.clone()
             caches.open(DATA_CACHE).then(c => c.put(event.request, toCache))
           }
@@ -86,7 +81,6 @@ self.addEventListener('fetch', event => {
       caches.open(FONT_CACHE).then(cache =>
         cache.match(event.request).then(cached => {
           const network = fetch(event.request).then(response => {
-            // clone() antes de retornar
             cache.put(event.request, response.clone())
             return response
           })
@@ -97,14 +91,15 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  // 4. Assets estáticos — Cache-first
+  // 4. Assets estáticos — Cache-first (apenas GET)
+  if (method !== 'GET') return
+
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached
       return fetch(event.request)
         .then(response => {
           if (response.ok) {
-            // clone() antes de retornar
             const toCache = response.clone()
             caches.open(CACHE_NAME).then(c => c.put(event.request, toCache))
           }
