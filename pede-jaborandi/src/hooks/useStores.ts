@@ -6,7 +6,24 @@ import { isStore } from '../types/types'
 import type { Store, Product } from '../types/types'
 import { MOCK_STORES } from '../data/mockStores'
 
-const TIMEOUT_MS = 10_000
+const TIMEOUT_MS  = 10_000
+const CACHE_KEY   = 'pede-jaborandi:stores-v1'
+const CACHE_TTL   = 5 * 60 * 1000 // 5 minutos
+
+function readCache(): Store[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY)
+    if (!raw) return null
+    const { ts, data } = JSON.parse(raw)
+    if (Date.now() - ts > CACHE_TTL) return null
+    return data as Store[]
+  } catch { return null }
+}
+
+function writeCache(stores: Store[]): void {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: stores })) }
+  catch { /* quota cheia */ }
+}
 
 interface UseStoresResult {
   stores:  Store[]
@@ -70,12 +87,19 @@ export function useStores(): UseStoresResult {
       return
     }
 
+    // Exibe cache imediatamente enquanto busca dados frescos
+    const cached = readCache()
+    if (cached) {
+      setStores(cached)
+      setLoading(false)
+    }
+
     let cancelled = false
-    setLoading(true)
+    if (!cached) setLoading(true)
     setError(false)
 
     const timeout = setTimeout(() => {
-      if (!cancelled) { setError(true); setLoading(false) }
+      if (!cancelled && !cached) { setError(true); setLoading(false) }
     }, TIMEOUT_MS)
 
     const run = async () => {
@@ -89,17 +113,18 @@ export function useStores(): UseStoresResult {
 
         if (supabaseError) {
           if (import.meta.env.DEV) console.error('Erro ao buscar comércios:', supabaseError)
-          setError(true)
+          if (!cached) setError(true)
         } else {
           const mapped = (data ?? [])
             .map(raw => mapStore(raw as Record<string, unknown>))
             .filter(isStore)
           setStores(mapped)
+          writeCache(mapped)
         }
         setLoading(false)
       } catch {
         clearTimeout(timeout)
-        if (!cancelled) { setError(true); setLoading(false) }
+        if (!cancelled && !cached) { setError(true); setLoading(false) }
       }
     }
     run()

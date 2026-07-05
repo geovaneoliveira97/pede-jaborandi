@@ -8,6 +8,22 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { existsSync } from 'fs'
+import type { Plugin } from 'vite'
+
+// Converte <link rel="stylesheet"> gerado pelo Vite em preload não-bloqueante
+function deferCssPlugin(): Plugin {
+  return {
+    name: 'defer-css',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace(
+        /<link rel="stylesheet" crossorigin href="([^"]+)">/g,
+        `<link rel="preload" as="style" href="$1" onload="this.onload=null;this.rel='stylesheet'">` +
+        `<noscript><link rel="stylesheet" href="$1"></noscript>`,
+      )
+    },
+  }
+}
 
 export default defineConfig(({ mode }) => {
   const envDir = existsSync('/etc/secrets/.env')
@@ -17,7 +33,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, '')
 
   return {
-    plugins: [react()],
+    plugins: [react(), deferCssPlugin()],
     define: {
       'import.meta.env.VITE_SUPABASE_URL':      JSON.stringify(env.VITE_SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
