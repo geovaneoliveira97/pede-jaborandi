@@ -10,10 +10,32 @@ import react from '@vitejs/plugin-react'
 import { existsSync } from 'fs'
 import type { Plugin } from 'vite'
 
-// Plugin vazio — CSS bloqueante é melhor neste caso porque o recálculo
-// de estilos após carregamento assíncrono custa mais que o bloqueio inicial de 150ms
-function htmlOptimizePlugin(): Plugin {
-  return { name: 'html-optimize', apply: 'build' }
+// Inline o CSS gerado pelo Vite diretamente no HTML.
+// Evita tanto o render-blocking quanto o Style&Layout reflow do carregamento assíncrono.
+// Funciona bem pois o Tailwind purga o CSS e o output final é ~5 KiB.
+function inlineCssPlugin(): Plugin {
+  const cssMap = new Map<string, string>()
+
+  return {
+    name: 'inline-css',
+    apply: 'build',
+    generateBundle(_opts, bundle) {
+      for (const [fileName, chunk] of Object.entries(bundle)) {
+        if (fileName.endsWith('.css') && chunk.type === 'asset') {
+          cssMap.set(fileName, chunk.source as string)
+          delete bundle[fileName]
+        }
+      }
+    },
+    transformIndexHtml(html) {
+      if (cssMap.size === 0) return html
+      const allCss = [...cssMap.values()].join('')
+      return html.replace(
+        /<link rel="stylesheet" crossorigin href="[^"]+\.css">/g,
+        `<style>${allCss}</style>`,
+      )
+    },
+  }
 }
 
 export default defineConfig(({ mode }) => {
@@ -24,7 +46,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, envDir, '')
 
   return {
-    plugins: [react(), htmlOptimizePlugin()],
+    plugins: [react(), inlineCssPlugin()],
     define: {
       'import.meta.env.VITE_SUPABASE_URL':      JSON.stringify(env.VITE_SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
