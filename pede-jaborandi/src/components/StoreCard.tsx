@@ -8,6 +8,7 @@ interface StoreCardProps {
   store:    Store
   onSelect: (store: Store) => void
   variant?: 'full' | 'grid'
+  priority?: boolean
 }
 
 function isWeekend(): boolean {
@@ -15,7 +16,7 @@ function isWeekend(): boolean {
   return day === 0 || day === 6
 }
 
-function StoreCard({ store, onSelect, variant = 'full' }: StoreCardProps) {
+function StoreCard({ store, onSelect, variant = 'full', priority = false }: StoreCardProps) {
   const [imgError, setImgError] = useState(false)
   const isClosed  = store.status === 'closed'
   const isVitrine = store.mode === 'vitrine'
@@ -55,7 +56,8 @@ function StoreCard({ store, onSelect, variant = 'full' }: StoreCardProps) {
             <img
               src={store.coverImage}
               alt={store.name}
-              loading="lazy"
+              loading={priority ? 'eager' : 'lazy'}
+              fetchPriority={priority ? 'high' : 'auto'}
               width={200}
               height={96}
               className="w-full h-full object-cover"
@@ -151,7 +153,8 @@ function StoreCard({ store, onSelect, variant = 'full' }: StoreCardProps) {
           <img
             src={store.coverImage}
             alt={store.name}
-            loading="lazy"
+            loading={priority ? 'eager' : 'lazy'}
+            fetchPriority={priority ? 'high' : 'auto'}
             width={400}
             height={120}
             className="w-full h-full object-cover"

@@ -200,7 +200,7 @@ export default function Home({ stores, onSelect }: HomeProps) {
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {openDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" />)}
+                {openDelivery.map((store, i) => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" priority={i === 0} />)}
               </div>
             </>
           )}
