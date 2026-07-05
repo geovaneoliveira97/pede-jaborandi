@@ -208,7 +208,7 @@ export default function Home({ stores, onSelect }: HomeProps) {
             <>
               <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--md-on-surface-variant)' }}>Fechados no momento</h2>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {closedDelivery.map(store => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" />)}
+                {closedDelivery.map((store, i) => <StoreCard key={store.id} store={store} onSelect={onSelect} variant="grid" priority={i < 4} />)}
               </div>
             </>
           )}
