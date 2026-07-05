@@ -92,7 +92,7 @@ export default function BottomNav({ view, onNavigate, cartCount }: BottomNavProp
                   padding:      '6px 18px',
                   borderRadius: '9999px',
                   background:   isActive ? 'rgba(232,93,38,0.10)' : 'transparent',
-                  color:        isActive ? '#E85D26' : 'var(--md-on-surface-variant)',
+                  color:        isActive ? '#B54A00' : 'var(--md-on-surface-variant)',
                   transition:   'background 0.2s, color 0.2s',
                 }}
               >
@@ -110,7 +110,7 @@ export default function BottomNav({ view, onNavigate, cartCount }: BottomNavProp
               <span
                 aria-hidden="true"
                 className="text-[11px] font-medium"
-                style={{ color: isActive ? '#E85D26' : 'var(--md-on-surface-variant)' }}
+                style={{ color: isActive ? '#B54A00' : 'var(--md-on-surface-variant)' }}
               >
                 {label}
               </span>

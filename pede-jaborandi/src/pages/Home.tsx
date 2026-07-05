@@ -176,7 +176,7 @@ export default function Home({ stores, onSelect }: HomeProps) {
                   minHeight:    '40px',
                   borderRadius: '9999px',
                   border:       `1px solid ${isActive ? 'transparent' : 'var(--md-outline-variant)'}`,
-                  background:   isActive ? '#E85D26' : 'var(--md-surface-lowest)',
+                  background:   isActive ? '#B54A00' : 'var(--md-surface-lowest)',
                   color:        isActive ? '#ffffff' : 'var(--md-on-surface-variant)',
                   fontSize:     '12px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer',
                 }}>

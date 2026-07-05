@@ -81,7 +81,7 @@ function StoreCard({ store, onSelect, variant = 'full', priority = false }: Stor
             style={
               isClosed  ? { background: 'rgba(0,0,0,0.55)', color: '#fff' } :
               isVitrine ? { background: '#1d4ed8', color: '#fff' } :
-                          { background: '#16A34A', color: '#fff' }
+                          { background: '#166534', color: '#fff' }
             }>
             {isClosed ? '● Fechado' : isVitrine ? 'Preços' : '● Aberto'}
           </span>
@@ -112,7 +112,7 @@ function StoreCard({ store, onSelect, variant = 'full', priority = false }: Stor
               </span>
             )}
             {!isVitrine && (
-              <span className="text-[10px] font-bold" style={{ color: '#16A34A' }}>
+              <span className="text-[10px] font-bold" style={{ color: '#166534' }}>
                 Grátis
               </span>
             )}
@@ -174,7 +174,7 @@ function StoreCard({ store, onSelect, variant = 'full', priority = false }: Stor
           style={
             isClosed  ? { background: 'rgba(0,0,0,0.55)', color: '#fff' } :
             isVitrine ? { background: '#1d4ed8', color: '#fff' } :
-                        { background: '#16A34A', color: '#fff' }
+                        { background: '#166534', color: '#fff' }
           }>
           {isClosed ? '● Fechado' : isVitrine ? '🏪 Ver preços' : '● Aberto'}
         </span>
@@ -208,7 +208,7 @@ function StoreCard({ store, onSelect, variant = 'full', priority = false }: Stor
                   🕐 {store.deliveryTime}
                 </span>
               )}
-              <span className="text-xs font-bold" style={{ color: '#16A34A' }}>
+              <span className="text-xs font-bold" style={{ color: '#166534' }}>
                 🛵 Entrega grátis
               </span>
               <span className="text-xs" style={{ color: 'var(--md-on-surface-variant)' }}>

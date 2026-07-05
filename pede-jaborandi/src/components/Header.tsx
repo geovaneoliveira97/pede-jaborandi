@@ -78,7 +78,7 @@ export default function Header({ title, onBack, cartCount, onCartClick, onAdminU
       <div className="flex-1 min-w-0">
         {!onBack && (
           <p className="text-[10px] font-semibold uppercase tracking-widest leading-none mb-0.5"
-            style={{ color: '#E85D26' }}>
+            style={{ color: '#B54A00' }}>
             Pede Jaborandi
           </p>
         )}
