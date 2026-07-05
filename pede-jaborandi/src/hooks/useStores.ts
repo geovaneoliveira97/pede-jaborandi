@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { isSupabaseConfigured, getSupabase } from '../lib/supabase'
+import { storesPrefetch } from '../lib/storesPrefetch'
 import { isStore } from '../types/types'
 import type { Store, Product } from '../types/types'
 import { MOCK_STORES } from '../data/mockStores'
@@ -104,9 +105,13 @@ export function useStores(): UseStoresResult {
 
     const run = async () => {
       try {
-        const { data, error: supabaseError } = await getSupabase()
-          .from('stores')
-          .select('*, products(*)')
+        // Na primeira carga usa a Promise que já está em voo desde antes do React montar.
+        // Em retentativas (retryKey > 0) inicia uma nova requisição.
+        const { data, error: supabaseError } = await (
+          retryKey === 0 && storesPrefetch
+            ? storesPrefetch
+            : getSupabase().from('stores').select('*, products(*)')
+        )
 
         clearTimeout(timeout)
         if (cancelled) return
