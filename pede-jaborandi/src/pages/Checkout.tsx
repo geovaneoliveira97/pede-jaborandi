@@ -1,6 +1,6 @@
 // src/pages/Checkout.tsx
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { CartItem, Store, CustomerData, PaymentMethod } from '../types/types'
 import { PAYMENT_LABELS } from '../types/types'
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
@@ -89,6 +89,51 @@ function ConfirmModal({ onConfirm, onCancel }: ConfirmModalProps) {
   )
 }
 
+// ── Modal de confirmação de envio ────────────────────────────────────────────
+interface SendConfirmModalProps {
+  onYes: () => void
+  onNo:  () => void
+}
+
+function SendConfirmModal({ onYes, onNo }: SendConfirmModalProps) {
+  return (
+    <div
+      role="dialog" aria-modal="true" aria-label="Confirmar envio do pedido"
+      className="fixed inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(0,0,0,0.45)' }}
+    >
+      <div className="w-full max-w-sm p-6 space-y-4 text-center"
+        style={{ background: 'var(--md-surface-lowest)', borderRadius: 'var(--shape-xl)', boxShadow: 'var(--md-elev-3)' }}>
+        <div className="w-16 h-16 flex items-center justify-center text-3xl mx-auto"
+          style={{ borderRadius: 'var(--shape-full)', background: '#FFF4E5' }}>
+          📲
+        </div>
+        <div>
+          <p className="font-bold text-lg"
+            style={{ color: 'var(--md-on-surface)', fontFamily: 'Google Sans Display, sans-serif' }}>
+            Você enviou a mensagem?
+          </p>
+          <p className="text-sm mt-1" style={{ color: 'var(--md-on-surface-variant)' }}>
+            Confirme que enviou o pedido pelo WhatsApp para registrarmos no painel do comércio.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button onClick={onNo}
+            className="flex-1 py-2.5 text-sm font-bold rounded-full transition-all active:scale-95"
+            style={{ border: '1px solid var(--md-outline-variant)', color: 'var(--md-on-surface-variant)', background: 'none' }}>
+            Ainda não
+          </button>
+          <button onClick={onYes}
+            className="flex-1 py-2.5 text-sm font-bold rounded-full transition-all active:scale-95"
+            style={{ background: 'var(--md-primary)', color: 'var(--md-on-primary)', border: 'none' }}>
+            Sim, enviei
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Estilos reutilizáveis ─────────────────────────────────────────────────────
 const sectionStyle: React.CSSProperties = {
   borderRadius: 'var(--shape-xl)',
@@ -114,6 +159,7 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('delivery')
   const [sending,      setSending]      = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
+  const [showSendConfirm, setShowSendConfirm] = useState(false)
   const [useDiscount,  setUseDiscount]  = useState(false)
   const [redeeming,    setRedeeming]    = useState(false)
 
@@ -162,44 +208,38 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
   const discount   = useDiscount && canRedeem ? (loyaltyConfig?.reward_brl ?? 5) : 0
   const finalPrice = Math.max(0, totalPrice - discount)
 
-  const handleSubmit = useCallback(async () => {
-    if (!store) return
-    const { name, phone, street, number, city } = customer
+  // Dados do pedido "em espera" — só é gravado no banco depois que o cliente
+  // confirmar explicitamente que enviou a mensagem (ver SendConfirmModal).
+  // Evita registrar pedidos de quem abre o WhatsApp e nunca chega a mandar.
+  const pendingOrderRef = useRef<{
+    phone: string; addressParts: string; storeId: number; storeName: string
+  } | null>(null)
+  const [awaitingReturn, setAwaitingReturn] = useState(false)
 
-    if (!name.trim())         { showToast('Informe seu nome!');                      return }
-    if (!phone.trim())        { showToast('Informe seu telefone!');                  return }
-    if (!isPhoneValid(phone)) { showToast('Telefone inválido — mínimo 10 dígitos!'); return }
-
-    // Endereço só obrigatório para delivery
-    if (deliveryType === 'delivery') {
-      if (!street.trim() || !city.trim()) { showToast('Busque o CEP ou preencha o endereço!'); return }
-      if (!number.trim())                 { showToast('Informe o número do imóvel!');           return }
-    }
-
-    setSending(true)
+  const finalizeOrder = useCallback(async () => {
+    const pending = pendingOrderRef.current
+    if (!pending) return
+    pendingOrderRef.current = null
+    setAwaitingReturn(false)
 
     if (useDiscount && canRedeem) {
       setRedeeming(true)
-      const { ok, error: redeemErr } = await redeemPoints(phone)
+      const { ok, error: redeemErr } = await redeemPoints(pending.phone)
       setRedeeming(false)
       if (!ok) {
         showToast(redeemErr ?? 'Erro ao resgatar pontos. Tente novamente.')
         setSending(false)
         return
       }
-      await refreshPoints(phone)
+      await refreshPoints(pending.phone)
     }
 
-    const addressParts = deliveryType === 'delivery'
-      ? [street, `nº ${number}`, customer.complement, customer.neighborhood, city].filter(Boolean).join(', ')
-      : 'Retirada no local'
-
     const { error: saveErr } = await apiSaveOrder({
-      storeId:       store.id,
-      storeName:     store.name,
-      customerName:  name.trim(),
-      customerPhone: phone.replace(/\D/g, ''),
-      address:       addressParts,
+      storeId:       pending.storeId,
+      storeName:     pending.storeName,
+      customerName:  customer.name.trim(),
+      customerPhone: pending.phone,
+      address:       pending.addressParts,
       items:         items.map(i => ({ productId: i.productId, name: i.name, price: i.price, qty: i.qty })),
       total:      totalPrice,
       payment:    customer.payment,
@@ -216,23 +256,89 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
 
     // Salva último pedido para "Pedir Novamente"
     saveLastOrder({
-      storeId:   store.id,
-      storeName: store.name,
+      storeId:   pending.storeId,
+      storeName: pending.storeName,
       items:     items.map(i => ({ name: i.name, qty: i.qty })),
       total:     finalPrice,
     })
 
+    creditPoint(pending.phone, pending.storeId)
+    setSending(false)
+    setShowConfirm(true)
+  }, [customer, items, totalPrice, discount, finalPrice, useDiscount, canRedeem, refreshPoints, showToast])
+
+  // Detecta a volta do cliente à aba depois de abrir o WhatsApp para
+  // perguntar, na hora certa, se ele enviou a mensagem — nunca assume
+  // sozinho. Se não detectarmos a volta em 20s (pop-up bloqueado, navegador
+  // que não muda o foco, WhatsApp Desktop), pergunta do mesmo jeito.
+  useEffect(() => {
+    if (!awaitingReturn) return
+
+    const askToConfirm = () => {
+      setAwaitingReturn(false)
+      setSending(false)
+      setShowSendConfirm(true)
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') askToConfirm()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    const timer = setTimeout(askToConfirm, 20_000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      clearTimeout(timer)
+    }
+  }, [awaitingReturn])
+
+  const handleConfirmSent = useCallback(() => {
+    setShowSendConfirm(false)
+    setSending(true)
+    finalizeOrder()
+  }, [finalizeOrder])
+
+  const handleNotSentYet = useCallback(() => {
+    setShowSendConfirm(false)
+    pendingOrderRef.current = null
+  }, [])
+
+  const handleSubmit = useCallback(() => {
+    if (!store) return
+
+    const { name, phone, street, number, city } = customer
+
+    if (!name.trim())         { showToast('Informe seu nome!');                      return }
+    if (!phone.trim())        { showToast('Informe seu telefone!');                  return }
+    if (!isPhoneValid(phone)) { showToast('Telefone inválido — mínimo 10 dígitos!'); return }
+
+    // Endereço só obrigatório para delivery
+    if (deliveryType === 'delivery') {
+      if (!street.trim() || !city.trim()) { showToast('Busque o CEP ou preencha o endereço!'); return }
+      if (!number.trim())                 { showToast('Informe o número do imóvel!');           return }
+    }
+
+    const addressParts = deliveryType === 'delivery'
+      ? [street, `nº ${number}`, customer.complement, customer.neighborhood, city].filter(Boolean).join(', ')
+      : 'Retirada no local'
+
+    // Abre o WhatsApp ANTES de gravar qualquer coisa no banco — o pedido só
+    // é registrado quando o cliente volta pra aba (ou confirma manualmente).
     const message = buildOrderMessage(store, items, customer, discount, deliveryType)
     const opened  = openWhatsApp(store.phone, message)
     if (!opened) {
       showToast('Número do comércio inválido — entre em contato diretamente.')
-      setSending(false)
       return
     }
 
-    creditPoint(phone, store.id)
-    setTimeout(() => { setSending(false); setShowConfirm(true) }, 800)
-  }, [store, items, customer, deliveryType, showToast, useDiscount, canRedeem, discount, finalPrice, refreshPoints, totalPrice])
+    pendingOrderRef.current = {
+      phone: phone.replace(/\D/g, ''),
+      addressParts,
+      storeId: store.id,
+      storeName: store.name,
+    }
+    setSending(true)
+    setAwaitingReturn(true)
+  }, [store, customer, items, deliveryType, discount, showToast])
 
   const cepFeedbackMsg: Record<typeof cepStatus, string> = {
     idle: '', loading: '🔍 Buscando endereço...', success: '✓ Endereço encontrado',
@@ -249,6 +355,10 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
 
   return (
     <div className="space-y-4 animate-enter">
+
+      {showSendConfirm && (
+        <SendConfirmModal onYes={handleConfirmSent} onNo={handleNotSentYet} />
+      )}
 
       {showConfirm && (
         <ConfirmModal
