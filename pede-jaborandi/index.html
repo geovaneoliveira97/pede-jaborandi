@@ -3,18 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="
-      default-src 'self';
-      connect-src 'self' https://rmuuojuqexsgzxekojtn.supabase.co wss://rmuuojuqexsgzxekojtn.supabase.co https://viacep.com.br;
-      img-src 'self' https://rmuuojuqexsgzxekojtn.supabase.co https://placehold.co data:;
-      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-      font-src https://fonts.gstatic.com;
-      script-src 'self';
-      object-src 'none';
-      base-uri 'self';
-      form-action 'self';
-      frame-ancestors 'none';
-    " />
+    <!-- CSP real vai por header HTTP (public/_headers) — frame-ancestors não
+         funciona via <meta> e precisa do header para ter efeito. -->
     <title>Pede Jaborandi</title>
 
     <link rel="icon" href="/icon-192.png" />
@@ -34,11 +24,13 @@
     <link rel="preconnect" href="https://rmuuojuqexsgzxekojtn.supabase.co" crossorigin />
 
     <!-- Fontes sem bloquear o render -->
+    <!-- O swap para rel=stylesheet acontece em main.tsx, não via onload=""
+         inline: CSP com script-src 'self' bloqueia handlers inline. -->
     <link
+      id="gfonts-preload"
       rel="preload"
       as="style"
       href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;500;700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
-      onload="this.onload=null;this.rel='stylesheet'"
     />
     <noscript>
       <link

@@ -20,6 +20,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </StrictMode>
 )
 
+// Ativa o <link rel="preload"> das fontes como stylesheet quando terminar de
+// carregar. Fica aqui (script externo) em vez de onload="" inline no HTML
+// porque a CSP (script-src 'self') bloqueia handlers de evento inline.
+const fontsLink = document.getElementById('gfonts-preload') as HTMLLinkElement | null
+fontsLink?.addEventListener('load', () => { fontsLink.rel = 'stylesheet' })
+
 // Registra o Service Worker apenas se o navegador tiver suporte.
 // O registro ocorre no evento 'load' para não competir com o carregamento
 // inicial da página, garantindo que o app já esteja visível antes do SW iniciar.
