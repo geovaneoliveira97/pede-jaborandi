@@ -208,7 +208,7 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
     })
 
     if (saveErr) {
-      console.error('[apiSaveOrder]', saveErr)
+      if (import.meta.env.DEV) console.error('[apiSaveOrder]', saveErr)
       showToast('Erro ao registrar pedido. Verifique sua conexão e tente novamente.')
       setSending(false)
       return

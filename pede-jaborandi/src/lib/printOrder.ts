@@ -3,6 +3,15 @@
 import type { Order } from '../types/types'
 import { formatBRL } from './format'
 
+// Dados do pedido (nome, telefone, endereço, itens) vêm de texto livre digitado
+// pelo cliente no checkout — nunca interpolar sem escapar, ou HTML/JS injetado
+// no nome do cliente executa nesta janela com acesso ao localStorage do admin.
+function escapeHtml(value: string): string {
+  const div = document.createElement('div')
+  div.textContent = value
+  return div.innerHTML
+}
+
 export function printOrder(order: Order, storeName: string) {
   const win = window.open('', '_blank', 'width=420,height=700')
   if (!win) return
@@ -12,7 +21,7 @@ export function printOrder(order: Order, storeName: string) {
 
   const itemsHtml = order.items.map(item => `
     <div class="row">
-      <span>${item.qty}x ${item.name}</span>
+      <span>${item.qty}x ${escapeHtml(item.name)}</span>
       <span>${formatBRL(item.price * item.qty)}</span>
     </div>`).join('')
 
@@ -34,13 +43,13 @@ export function printOrder(order: Order, storeName: string) {
 </style>
 </head>
 <body>
-  <div class="center bold big">${storeName}</div>
+  <div class="center bold big">${escapeHtml(storeName)}</div>
   <div class="center">Pedido #${shortId}</div>
   <div class="center" style="font-size:10px">${dateStr}</div>
   <div class="dash"></div>
-  <div class="bold">Cliente: ${order.customerName}</div>
-  <div>Tel: ${order.customerPhone}</div>
-  ${order.address ? `<div style="margin-top:2px">End: ${order.address}</div>` : '<div style="margin-top:2px">🏃 Retirada no local</div>'}
+  <div class="bold">Cliente: ${escapeHtml(order.customerName)}</div>
+  <div>Tel: ${escapeHtml(order.customerPhone)}</div>
+  ${order.address ? `<div style="margin-top:2px">End: ${escapeHtml(order.address)}</div>` : '<div style="margin-top:2px">🏃 Retirada no local</div>'}
   <div class="dash"></div>
   <div class="bold" style="margin-bottom:3px">ITENS</div>
   ${itemsHtml}
@@ -48,7 +57,7 @@ export function printOrder(order: Order, storeName: string) {
   ${order.discount > 0 ? `<div class="row"><span>Desconto fidelidade</span><span>- ${formatBRL(order.discount)}</span></div>` : ''}
   <div class="row total"><span>TOTAL</span><span>${formatBRL(order.final_total)}</span></div>
   <div class="dash"></div>
-  <div>Pagamento: ${order.payment}</div>
+  <div>Pagamento: ${escapeHtml(order.payment)}</div>
   <div class="dash"></div>
   <div class="center" style="margin-top:6px">Obrigado pela preferência!</div>
   <script>window.onload = function(){ window.print(); window.close(); }</script>

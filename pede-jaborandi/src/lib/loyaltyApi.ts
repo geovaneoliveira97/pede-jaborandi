@@ -79,20 +79,20 @@ export async function updateLoyaltyConfig(
 
 // ── Saldo ─────────────────────────────────────────────────────────────────────
 
-/** Retorna o saldo de pontos do usuário. */
+/**
+ * Retorna o saldo de pontos do usuário.
+ * Passa pela função get_points (SECURITY DEFINER) em vez de ler a tabela
+ * user_points diretamente — a tabela não tem policy pública de SELECT.
+ */
 export async function getPoints(phone: string): Promise<number> {
   if (!isSupabaseConfigured()) return 0
 
   const norm = normalizePhone(phone)
   if (!norm) return 0
 
-  const { data } = await getSupabase()
-    .from('user_points')
-    .select('points')
-    .eq('phone', norm)
-    .maybeSingle()
+  const { data } = await getSupabase().rpc('get_points', { p_phone: norm })
 
-  return data?.points ?? 0
+  return (data as number | null) ?? 0
 }
 
 // ── Crédito (ganhar pontos) ───────────────────────────────────────────────────
@@ -114,16 +114,12 @@ export async function creditPoint(
   const norm = normalizePhone(phone)
   if (!norm) return { credited: false, error: 'Telefone inválido' }
 
-  // Incrementa saldo atomicamente via função RPC
+  // increment_points agora registra o histórico internamente (mesma transação),
+  // já que points_history não tem mais policy pública de INSERT.
   const { error: rpcErr } = await getSupabase()
-    .rpc('increment_points', { p_phone: norm, p_delta: config.pts_per_purchase })
+    .rpc('increment_points', { p_phone: norm, p_delta: config.pts_per_purchase, p_store_id: storeId, p_type: 'earn' })
 
   if (rpcErr) return { credited: false, error: rpcErr.message }
-
-  // Registra no histórico
-  await getSupabase()
-    .from('points_history')
-    .insert({ phone: norm, store_id: storeId, type: 'earn', delta: config.pts_per_purchase })
 
   return { credited: true, error: null }
 }
@@ -134,6 +130,11 @@ export async function creditPoint(
  * Resgata os pontos do usuário para obter desconto.
  * Retorna { ok: true, discount: 5.00 } se bem-sucedido.
  * Retorna { ok: false } se saldo insuficiente ou sistema inativo.
+ *
+ * A checagem de saldo e o débito acontecem atomicamente dentro da função
+ * redeem_points (com `for update`), eliminando a condição de corrida da
+ * versão anterior — que lia o saldo numa consulta e debitava em outra,
+ * permitindo resgate em dobro com duas requisições simultâneas.
  */
 export async function redeemPoints(
   phone: string
@@ -144,45 +145,34 @@ export async function redeemPoints(
   if (!config.active) return { ok: false, discount: 0, error: 'Sistema inativo' }
 
   const norm = normalizePhone(phone)
-  const currentPoints = await getPoints(norm)
+  if (!norm) return { ok: false, discount: 0, error: 'Telefone inválido' }
 
-  if (currentPoints < config.pts_threshold) {
-    return {
-      ok:       false,
-      discount: 0,
-      error:    `Saldo insuficiente (${currentPoints}/${config.pts_threshold} pontos)`,
-    }
-  }
-
-  // Debita os pontos
-  const { error: rpcErr } = await getSupabase()
-    .rpc('increment_points', { p_phone: norm, p_delta: -config.pts_threshold })
+  const { data, error: rpcErr } = await getSupabase()
+    .rpc('redeem_points', { p_phone: norm, p_threshold: config.pts_threshold, p_reward: config.reward_brl })
+    .single<{ ok: boolean; discount: number }>()
 
   if (rpcErr) return { ok: false, discount: 0, error: rpcErr.message }
+  if (!data?.ok) {
+    return { ok: false, discount: 0, error: `Saldo insuficiente (mínimo ${config.pts_threshold} pontos)` }
+  }
 
-  // Registra o resgate no histórico
-  await getSupabase()
-    .from('points_history')
-    .insert({ phone: norm, store_id: null, type: 'redeem', delta: -config.pts_threshold })
-
-  return { ok: true, discount: config.reward_brl, error: null }
+  return { ok: true, discount: data.discount, error: null }
 }
 
 // ── Histórico ─────────────────────────────────────────────────────────────────
 
-/** Retorna os últimos 20 movimentos do usuário (mais recente primeiro). */
+/**
+ * Retorna os últimos 20 movimentos do usuário (mais recente primeiro).
+ * Passa pela função get_points_history (SECURITY DEFINER) — points_history
+ * não tem mais policy pública de SELECT.
+ */
 export async function getPointsHistory(phone: string): Promise<PointsHistory[]> {
   if (!isSupabaseConfigured()) return []
 
   const norm = normalizePhone(phone)
   if (!norm) return []
 
-  const { data } = await getSupabase()
-    .from('points_history')
-    .select('*')
-    .eq('phone', norm)
-    .order('created_at', { ascending: false })
-    .limit(20)
+  const { data } = await getSupabase().rpc('get_points_history', { p_phone: norm, p_limit: 20 })
 
   return (data ?? []) as PointsHistory[]
 }
