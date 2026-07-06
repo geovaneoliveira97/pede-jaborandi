@@ -111,10 +111,10 @@ function SendConfirmModal({ onYes, onNo }: SendConfirmModalProps) {
         <div>
           <p className="font-bold text-lg"
             style={{ color: 'var(--md-on-surface)', fontFamily: 'Google Sans Display, sans-serif' }}>
-            Você enviou a mensagem?
+            Enviou a mensagem?
           </p>
           <p className="text-sm mt-1" style={{ color: 'var(--md-on-surface-variant)' }}>
-            Confirme que enviou o pedido pelo WhatsApp para registrarmos no painel do comércio.
+            O comércio só vê seu pedido depois que você enviar a mensagem no WhatsApp.
           </p>
         </div>
         <div className="flex gap-3">
