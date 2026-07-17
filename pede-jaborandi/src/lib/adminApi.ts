@@ -97,13 +97,13 @@ export async function apiUpdateProduct(
 ): Promise<{ error: string | null }> {
   if (!isSupabaseConfigured()) return { error: null }
   const payload: Record<string, unknown> = {}
-  if (updates.name        !== undefined) payload.name         = updates.name
-  if (updates.description !== undefined) payload.description  = updates.description
-  if (updates.price       !== undefined) payload.price        = updates.price
-  if (updates.section     !== undefined) payload.section      = updates.section
-  if (updates.image       !== undefined) payload.image        = updates.image ?? null
-  if (updates.ofertaDia    !== undefined) payload.oferta_dia   = updates.ofertaDia
-  if (updates.ofertaPreco  !== undefined) payload.oferta_preco = updates.ofertaPreco ?? null
+  if ('name'        in updates)           payload.name         = updates.name
+  if ('description' in updates)           payload.description  = updates.description
+  if ('price'       in updates)           payload.price        = updates.price
+  if ('section'     in updates)           payload.section      = updates.section
+  if ('image'       in updates)           payload.image        = updates.image ?? null
+  if ('ofertaDia'   in updates)            payload.oferta_dia   = updates.ofertaDia
+  if ('ofertaPreco' in updates)            payload.oferta_preco = updates.ofertaPreco ?? null
   if ('productType' in updates)           payload.product_type = updates.productType ?? 'item'
   if ('allowHalf'   in updates)           payload.allow_half   = updates.allowHalf   ?? false
   if ('sizes'       in updates)           payload.sizes        = updates.sizes        ?? null
