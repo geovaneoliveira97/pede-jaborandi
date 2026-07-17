@@ -38,6 +38,8 @@ const PAGE_TITLES: Record<AppView, string> = {
   vitrine:  'Preços',
 }
 
+const CURRENT_STORE_KEY = 'pj_current_store_id'
+
 const BACK_VIEWS: Partial<Record<AppView, AppView>> = {
   menu:     'home',
   cart:     'menu',
@@ -103,8 +105,29 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
 
   const handleSelectStore = useCallback((store: Store) => {
     setCurrentStore(store)
+    try { localStorage.setItem(CURRENT_STORE_KEY, String(store.id)) } catch { /* ignora erro de storage */ }
     navigateTo(store.mode === 'vitrine' ? 'vitrine' : 'menu')
   }, [navigateTo])
+
+  // Restaura a loja selecionada depois de um reload de página real (ex: gesto
+  // de deslizar/atualizar no mobile). A view volta pela URL (#menu), mas o
+  // objeto Store em si só existe na memória — sem isso, a tela de Menu/Vitrine
+  // fica em branco porque currentStore continua null.
+  useEffect(() => {
+    if (currentStore) return
+    if (view !== 'menu' && view !== 'vitrine') return
+    if (loading || activeStores.length === 0) return
+
+    try {
+      const savedId = localStorage.getItem(CURRENT_STORE_KEY)
+      const found = savedId ? activeStores.find(s => s.id === Number(savedId)) : undefined
+      if (found) { setCurrentStore(found); return }
+    } catch { /* ignora erro de storage */ }
+
+    // Não achou a loja salva (removida, ou nunca existiu) — volta pra Home
+    // em vez de deixar a tela em branco.
+    navigateTo('home')
+  }, [view, currentStore, activeStores, loading, navigateTo])
 
   const handleOrderSuccess = useCallback(() => {
     clearCart()
