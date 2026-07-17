@@ -9,6 +9,7 @@
 // Resumo visual fixo no rodapé.
 
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { Product, PizzaCrust, PizzaSize } from '../types/types'
 import { formatBRL } from '../lib/format'
 
@@ -124,7 +125,7 @@ export default function PizzaModal({ product, allPizzas, storeColor, onConfirm, 
     fontSize: '11px', fontWeight: 800,
   })
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -494,6 +495,7 @@ export default function PizzaModal({ product, allPizzas, storeColor, onConfirm, 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

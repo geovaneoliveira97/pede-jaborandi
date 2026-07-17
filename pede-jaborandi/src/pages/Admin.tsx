@@ -1,6 +1,7 @@
 // src/pages/Admin.tsx
 
 import { useState, useCallback, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { Store, Product, StoreStatus, Order, OrderStatus } from '../types/types'
 import type { AuthUser } from '../lib/auth'
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase'
@@ -70,7 +71,7 @@ const emptyProductForm = (storeId = 0): ProductForm => ({
 function ConfirmDialog({ message, confirmLabel = 'Remover', onConfirm, onCancel }: {
   message: string; confirmLabel?: string; onConfirm: () => void; onCancel: () => void
 }) {
-  return (
+  return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center px-6"
       style={{ background: 'rgba(0,0,0,0.5)' }}>
       <div className="w-full max-w-sm p-6 space-y-4"
@@ -87,7 +88,8 @@ function ConfirmDialog({ message, confirmLabel = 'Remover', onConfirm, onCancel 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -119,7 +121,7 @@ function EditStoreModal({ store, onSave, onCancel }: {
     onCancel()
   }, [form, onSave, onCancel])
 
-  return (
+  return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,0.5)' }}>
       <div className="w-full max-w-lg p-6 space-y-3 overflow-y-auto"
@@ -160,7 +162,8 @@ function EditStoreModal({ store, onSave, onCancel }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -229,7 +232,7 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
 
   const pizzaBg: React.CSSProperties = { background: 'var(--md-primary-container)', borderRadius: 'var(--shape-xl)', padding: '16px' }
 
-  return (
+  return createPortal(
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: 'rgba(0,0,0,0.5)' }}>
       <div className="w-full max-w-lg p-6 space-y-3 overflow-y-auto"
@@ -331,7 +334,8 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

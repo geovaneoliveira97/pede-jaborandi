@@ -1,6 +1,7 @@
 // src/pages/Checkout.tsx
 
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { CartItem, Store, CustomerData, PaymentMethod } from '../types/types'
 import { PAYMENT_LABELS } from '../types/types'
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
@@ -50,7 +51,7 @@ interface ConfirmModalProps {
 }
 
 function ConfirmModal({ onConfirm, onCancel }: ConfirmModalProps) {
-  return (
+  return createPortal(
     <div
       role="dialog" aria-modal="true" aria-label="Pedido enviado"
       className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -84,7 +85,8 @@ function ConfirmModal({ onConfirm, onCancel }: ConfirmModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
@@ -95,7 +97,7 @@ interface SendConfirmModalProps {
 }
 
 function SendConfirmModal({ onYes, onNo }: SendConfirmModalProps) {
-  return (
+  return createPortal(
     <div
       role="dialog" aria-modal="true" aria-label="Confirmar envio do pedido"
       className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -129,7 +131,8 @@ function SendConfirmModal({ onYes, onNo }: SendConfirmModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

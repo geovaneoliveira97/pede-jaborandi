@@ -1,6 +1,7 @@
 // src/pages/Menu.tsx
 
 import { useMemo, useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Store, Product, CartItem } from '../types/types'
 import type { UseCartResult } from '../hooks/useCart'
 import ProductCard from '../components/ProductCard'
@@ -30,7 +31,7 @@ interface SwitchStoreModalProps {
 }
 
 function SwitchStoreModal({ fromStore, toStore, onConfirm, onCancel }: SwitchStoreModalProps) {
-  return (
+  return createPortal(
     <div
       role="dialog" aria-modal="true" aria-label="Trocar comércio"
       className="fixed inset-0 z-50 flex items-center justify-center px-6"
@@ -64,7 +65,8 @@ function SwitchStoreModal({ fromStore, toStore, onConfirm, onCancel }: SwitchSto
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
