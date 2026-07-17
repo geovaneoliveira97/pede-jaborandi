@@ -1,6 +1,6 @@
 // src/types/types.ts
 
-export type AppView      = 'home' | 'menu' | 'cart' | 'checkout' | 'admin' | 'pontos' | 'vitrine'
+export type AppView      = 'home' | 'menu' | 'cart' | 'checkout' | 'admin' | 'vitrine'
 export type StoreStatus  = 'open' | 'closed'
 export type StoreMode    = 'delivery' | 'vitrine'
 export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao'

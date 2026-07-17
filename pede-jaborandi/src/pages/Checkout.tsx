@@ -5,8 +5,7 @@ import type { CartItem, Store, CustomerData, PaymentMethod } from '../types/type
 import { PAYMENT_LABELS } from '../types/types'
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
 import { useAddressByCep } from '../hooks/useAddressByCep'
-import { useLoyalty } from '../hooks/useLoyalty'
-import { creditPoint, redeemPoints } from '../lib/loyaltyApi'
+import { validateCoupon, redeemCoupon, computeDiscount, type DiscountType } from '../lib/couponApi'
 import { formatBRL } from '../lib/format'
 import { apiSaveOrder } from '../lib/adminApi'
 import { saveLastOrder } from '../components/LastOrderBanner'
@@ -160,14 +159,17 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
   const [sending,      setSending]      = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [showSendConfirm, setShowSendConfirm] = useState(false)
-  const [useDiscount,  setUseDiscount]  = useState(false)
-  const [redeeming,    setRedeeming]    = useState(false)
+
+  // ── Cupom de desconto ──
+  const [couponInput,    setCouponInput]    = useState('')
+  const [coupon,         setCoupon]         = useState<{ code: string; discountType: DiscountType; discountValue: number } | null>(null)
+  const [applyingCoupon, setApplyingCoupon] = useState(false)
+  const [couponMsg,      setCouponMsg]      = useState<string | null>(null)
 
   const store = stores.find(s => s.id === items[0]?.storeId)
   const { address: cepData, status: cepStatus } = useAddressByCep(
     deliveryType === 'delivery' ? customer.cep : '',
   )
-  const { config: loyaltyConfig, points, refreshPoints } = useLoyalty(customer.phone)
 
   useEffect(() => {
     if (!cepData) return
@@ -178,10 +180,6 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       city:         cepData.localidade || prev.city,
     }))
   }, [cepData])
-
-  useEffect(() => {
-    if (useDiscount && !isPhoneValid(customer.phone)) setUseDiscount(false)
-  }, [customer.phone, useDiscount])
 
   // Ao trocar para retirada, limpa campos de endereço para não bloquear validação
   useEffect(() => {
@@ -200,13 +198,30 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
   const handleCepChange   = useCallback((raw: string) => setField('cep',   maskCep(raw)),   [setField])
   const handlePhoneChange = useCallback((raw: string) => setField('phone', maskPhone(raw)), [setField])
 
-  const canRedeem =
-    loyaltyConfig?.active === true &&
-    points >= (loyaltyConfig?.pts_threshold ?? 10) &&
-    isPhoneValid(customer.phone)
-
-  const discount   = useDiscount && canRedeem ? (loyaltyConfig?.reward_brl ?? 5) : 0
+  const discount   = coupon ? computeDiscount(totalPrice, coupon.discountType, coupon.discountValue) : 0
   const finalPrice = Math.max(0, totalPrice - discount)
+
+  const handleApplyCoupon = useCallback(async () => {
+    const code = couponInput.trim()
+    if (!code) return
+    setApplyingCoupon(true)
+    setCouponMsg(null)
+    const res = await validateCoupon(code)
+    setApplyingCoupon(false)
+    if (!res.ok || res.discountType == null || res.discountValue == null) {
+      setCoupon(null)
+      setCouponMsg(res.message || 'Cupom inválido')
+      return
+    }
+    setCoupon({ code, discountType: res.discountType, discountValue: res.discountValue })
+    setCouponMsg(null)
+  }, [couponInput])
+
+  const handleRemoveCoupon = useCallback(() => {
+    setCoupon(null)
+    setCouponInput('')
+    setCouponMsg(null)
+  }, [])
 
   // Dados do pedido "em espera" — só é gravado no banco depois que o cliente
   // confirmar explicitamente que enviou a mensagem (ver SendConfirmModal).
@@ -222,16 +237,13 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
     pendingOrderRef.current = null
     setAwaitingReturn(false)
 
-    if (useDiscount && canRedeem) {
-      setRedeeming(true)
-      const { ok, error: redeemErr } = await redeemPoints(pending.phone)
-      setRedeeming(false)
-      if (!ok) {
-        showToast(redeemErr ?? 'Erro ao resgatar pontos. Tente novamente.')
+    if (coupon) {
+      const res = await redeemCoupon(coupon.code)
+      if (!res.ok) {
+        showToast(res.message || 'Cupom não pôde ser aplicado. Tente novamente.')
         setSending(false)
         return
       }
-      await refreshPoints(pending.phone)
     }
 
     const { error: saveErr } = await apiSaveOrder({
@@ -262,10 +274,9 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       total:     finalPrice,
     })
 
-    creditPoint(pending.phone, pending.storeId)
     setSending(false)
     setShowConfirm(true)
-  }, [customer, items, totalPrice, discount, finalPrice, useDiscount, canRedeem, refreshPoints, showToast])
+  }, [customer, items, totalPrice, discount, finalPrice, coupon, showToast])
 
   // Detecta a volta do cliente à aba depois de abrir o WhatsApp para
   // perguntar, na hora certa, se ele enviou a mensagem — nunca assume
@@ -389,43 +400,49 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
                 Número incompleto — informe o DDD + número
               </p>
             )}
-            {loyaltyConfig?.active && isPhoneValid(customer.phone) && (
-              <p className="text-xs font-semibold mt-1" style={{ color: 'var(--md-primary)' }}>
-                ⭐ Você tem {points} ponto{points !== 1 ? 's' : ''} de fidelidade
-              </p>
-            )}
           </div>
         </div>
       </section>
 
-      {/* ── Banner de resgate ── */}
-      {canRedeem && (
-        <section className="animate-enter" aria-label="Resgate de pontos">
-          <button onClick={() => setUseDiscount(prev => !prev)}
-            className="w-full flex items-center gap-4 p-4 transition-all"
-            style={{
-              borderRadius: 'var(--shape-xl)',
-              border:       `2px ${useDiscount ? 'solid' : 'dashed'} ${useDiscount ? 'var(--md-primary)' : 'color-mix(in srgb, var(--md-primary) 50%, transparent)'}`,
-              background:   useDiscount ? 'var(--md-primary-container)' : 'var(--md-surface-lowest)',
-            }}>
-            <span className="text-2xl shrink-0">🎁</span>
-            <div className="flex-1 text-left">
-              <p className="font-black text-sm" style={{ color: 'var(--md-on-surface)' }}>
-                Usar {loyaltyConfig?.pts_threshold} pontos → -{formatBRL(loyaltyConfig?.reward_brl ?? 5)} de desconto
+      {/* ── Cupom de desconto ── */}
+      <section style={sectionStyle} aria-label="Cupom de desconto">
+        <p style={sectionLabelStyle}>🎟️ Cupom de desconto</p>
+        {coupon ? (
+          <div className="flex items-center justify-between p-3 rounded-xl"
+            style={{ background: 'var(--md-primary-container)' }}>
+            <div>
+              <p className="font-black text-sm" style={{ color: 'var(--md-on-primary-container)' }}>
+                {coupon.code.toUpperCase()} aplicado
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--md-on-surface-variant)' }}>
-                Você tem {points} ponto{points !== 1 ? 's' : ''}
-                {useDiscount ? ' · Desconto será aplicado!' : ' · Toque para usar'}
+              <p className="text-xs mt-0.5" style={{ color: 'var(--md-on-primary-container)', opacity: 0.8 }}>
+                {coupon.discountType === 'percent'
+                  ? `${coupon.discountValue}% de desconto`
+                  : `${formatBRL(coupon.discountValue)} de desconto`}
               </p>
             </div>
-            <span className="w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors"
-              style={{ borderColor: useDiscount ? 'var(--md-primary)' : 'var(--md-outline)', background: useDiscount ? 'var(--md-primary)' : 'transparent' }}
-              aria-hidden="true">
-              {useDiscount && <span className="w-2.5 h-2.5 rounded-full bg-white" />}
-            </span>
-          </button>
-        </section>
-      )}
+            <button onClick={handleRemoveCoupon} className="text-xs font-bold px-3 py-1.5 rounded-full shrink-0"
+              style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>
+              Remover
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-2">
+              <input type="text" aria-label="Código do cupom" value={couponInput}
+                onChange={e => { setCouponInput(e.target.value.toUpperCase()); setCouponMsg(null) }}
+                onKeyDown={e => e.key === 'Enter' && handleApplyCoupon()}
+                placeholder="Digite o código" className="form-input flex-1" />
+              <button onClick={handleApplyCoupon} disabled={applyingCoupon || !couponInput.trim()}
+                className="btn-primary px-5 text-sm disabled:opacity-50 shrink-0">
+                {applyingCoupon ? '...' : 'Aplicar'}
+              </button>
+            </div>
+            {couponMsg && (
+              <p className="text-xs font-semibold mt-2" style={{ color: 'var(--md-error)' }}>{couponMsg}</p>
+            )}
+          </>
+        )}
+      </section>
 
       {/* ── Tipo de entrega ── */}
       <section style={sectionStyle} aria-label="Tipo de entrega">
@@ -592,7 +609,7 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
         ))}
         {discount > 0 && (
           <div className="flex justify-between text-sm mb-1.5">
-            <span className="font-semibold" style={{ color: '#1B6B3A' }}>🎁 Desconto fidelidade</span>
+            <span className="font-semibold" style={{ color: '#1B6B3A' }}>🎟️ Desconto (cupom)</span>
             <span className="font-semibold" style={{ color: '#1B6B3A' }}>-{formatBRL(discount)}</span>
           </div>
         )}
@@ -612,9 +629,9 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
         </div>
       </section>
 
-      <button onClick={handleSubmit} disabled={sending || redeeming}
+      <button onClick={handleSubmit} disabled={sending}
         className="btn-primary w-full py-4 text-base disabled:opacity-60 disabled:cursor-not-allowed">
-        {redeeming ? '⏳ Resgatando pontos...' : sending ? '⏳ Abrindo WhatsApp...' : '📲 Enviar Pedido no WhatsApp'}
+        {sending ? '⏳ Abrindo WhatsApp...' : '📲 Enviar Pedido no WhatsApp'}
       </button>
     </div>
   )

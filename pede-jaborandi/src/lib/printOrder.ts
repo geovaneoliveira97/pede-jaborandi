@@ -1,4 +1,4 @@
-// src/lib/printOrder.ts — Impressão de cupom térmico 80mm
+// src/lib/printOrder.ts — Impressão de cupom térmico 58mm
 
 import type { Order } from '../types/types'
 import { formatBRL } from './format'
@@ -31,21 +31,22 @@ export function printOrder(order: Order, storeName: string) {
 <meta charset="UTF-8">
 <title>Pedido #${shortId}</title>
 <style>
+  @page { size: 58mm auto; margin: 0mm; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Courier New', monospace; font-size: 12px; width: 80mm; padding: 6px 8px; }
+  body { font-family: 'Courier New', monospace; font-size: 10px; width: 58mm; padding: 4px 5px; }
   .center { text-align: center; }
   .bold   { font-weight: bold; }
-  .big    { font-size: 15px; }
-  .dash   { border-top: 1px dashed #000; margin: 5px 0; }
+  .big    { font-size: 13px; }
+  .dash   { border-top: 1px dashed #000; margin: 4px 0; }
   .row    { display: flex; justify-content: space-between; margin: 2px 0; }
-  .total  { font-size: 14px; font-weight: bold; }
+  .total  { font-size: 12px; font-weight: bold; }
   @media print { button { display: none; } }
 </style>
 </head>
 <body>
   <div class="center bold big">${escapeHtml(storeName)}</div>
   <div class="center">Pedido #${shortId}</div>
-  <div class="center" style="font-size:10px">${dateStr}</div>
+  <div class="center" style="font-size:9px">${dateStr}</div>
   <div class="dash"></div>
   <div class="bold">Cliente: ${escapeHtml(order.customerName)}</div>
   <div>Tel: ${escapeHtml(order.customerPhone)}</div>
@@ -54,7 +55,7 @@ export function printOrder(order: Order, storeName: string) {
   <div class="bold" style="margin-bottom:3px">ITENS</div>
   ${itemsHtml}
   <div class="dash"></div>
-  ${order.discount > 0 ? `<div class="row"><span>Desconto fidelidade</span><span>- ${formatBRL(order.discount)}</span></div>` : ''}
+  ${order.discount > 0 ? `<div class="row"><span>Desconto (cupom)</span><span>- ${formatBRL(order.discount)}</span></div>` : ''}
   <div class="row total"><span>TOTAL</span><span>${formatBRL(order.final_total)}</span></div>
   <div class="dash"></div>
   <div>Pagamento: ${escapeHtml(order.payment)}</div>

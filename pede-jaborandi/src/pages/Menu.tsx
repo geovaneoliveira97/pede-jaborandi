@@ -129,22 +129,13 @@ export default function Menu({
     return groupBySection(filtered)
   }, [store.products, search])
 
-  const [pendingProduct,   setPendingProduct]   = useState<Product | null>(null)
-  const [currentStoreName, setCurrentStoreName] = useState('')
-  const [pizzaProduct,     setPizzaProduct]     = useState<Product | null>(null)
+  const [pendingProduct, setPendingProduct] = useState<Product | null>(null)
+  const [pizzaProduct,   setPizzaProduct]   = useState<Product | null>(null)
 
   const addSimple = useCallback((product: Product) => {
     const result = addItem(store, product)
     if (result === 'different_store') {
       setPendingProduct(product)
-      try {
-        const raw = localStorage.getItem('pj_cart')
-        if (raw) {
-          const its = JSON.parse(raw) as Array<{ storeId: number }>
-          const storedId = its[0]?.storeId
-          if (storedId) setCurrentStoreName(`loja #${storedId}`)
-        }
-      } catch { setCurrentStoreName('outro comércio') }
       return
     }
     showToast(`✓ ${product.name} adicionado!`)
@@ -184,7 +175,7 @@ export default function Menu({
 
       {pendingProduct && (
         <SwitchStoreModal
-          fromStore={currentStoreName}
+          fromStore="outro comércio"
           toStore={store.name}
           onConfirm={confirmSwitch}
           onCancel={() => setPendingProduct(null)}

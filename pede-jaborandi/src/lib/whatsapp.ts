@@ -81,7 +81,7 @@ export function buildOrderMessage(
 
   if (discount > 0) {
     lines.push(`💰 Subtotal: ${formatBRL(total)}`)
-    lines.push(`🎁 Desconto fidelidade: -${formatBRL(discount)}`)
+    lines.push(`🎟️ Desconto (cupom): -${formatBRL(discount)}`)
     lines.push(`✅ *TOTAL: ${formatBRL(finalTotal)}*`)
   } else {
     lines.push(`✅ *TOTAL: ${formatBRL(total)}*`)

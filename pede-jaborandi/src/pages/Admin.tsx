@@ -6,9 +6,11 @@ import type { AuthUser } from '../lib/auth'
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase'
 import { formatBRL } from '../lib/format'
 import {
-  getLoyaltyConfig, setLoyaltyActive, updateLoyaltyConfig, type LoyaltyConfig,
-} from '../lib/loyaltyApi'
+  apiListCoupons, apiCreateCoupon, apiToggleCoupon, apiDeleteCoupon,
+  type Coupon, type DiscountType,
+} from '../lib/couponApi'
 import { apiGetRecentOrders, apiUpdateOrderStatus, apiDeleteOrder, apiSaveOrder } from '../lib/adminApi'
+import { playNewOrderSound } from '../lib/sound'
 import ImageUpload from '../components/ImageUpload'
 import OrderStatusPanel from '../components/OrderStatusPanel'
 
@@ -379,43 +381,66 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
   )
 }
 
-// ── Loyalty Section ──────────────────────────────────────────────────────────
-function LoyaltySection() {
-  const [config,        setConfig]        = useState<LoyaltyConfig | null>(null)
-  const [loading,       setLoading]       = useState(true)
-  const [saving,        setSaving]        = useState(false)
-  const [showEdit,      setShowEdit]      = useState(false)
-  const [editThreshold, setEditThreshold] = useState('')
-  const [editReward,    setEditReward]    = useState('')
+// ── Coupon Section ───────────────────────────────────────────────────────────
+function CouponSection() {
+  const [coupons,  setCoupons]  = useState<Coupon[]>([])
+  const [loading,  setLoading]  = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [saving,   setSaving]   = useState(false)
+  const [code,      setCode]      = useState('')
+  const [type,      setType]      = useState<DiscountType>('fixed')
+  const [value,     setValue]     = useState('')
+  const [maxUses,   setMaxUses]   = useState('')
+  const [expiresAt, setExpiresAt] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
 
-  useEffect(() => {
-    getLoyaltyConfig().then(cfg => {
-      setConfig(cfg); setEditThreshold(String(cfg.pts_threshold))
-      setEditReward(String(cfg.reward_brl)); setLoading(false)
-    })
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { coupons: data } = await apiListCoupons()
+    setCoupons(data)
+    setLoading(false)
   }, [])
 
-  const handleToggle = useCallback(async () => {
-    if (!config) return
-    const newActive = !config.active
-    setSaving(true)
-    const { error } = await setLoyaltyActive(newActive)
-    setSaving(false)
-    if (!error) setConfig(prev => prev ? { ...prev, active: newActive } : prev)
-  }, [config])
+  useEffect(() => { load() }, [load])
 
-  const handleSave = useCallback(async () => {
-    const threshold = parseInt(editThreshold, 10)
-    const reward    = parseFloat(editReward)
-    if (isNaN(threshold) || isNaN(reward) || threshold < 1 || reward < 0) return
+  const handleCreate = useCallback(async () => {
+    const v = parseFloat(value)
+    if (!code.trim() || isNaN(v) || v <= 0) return
     setSaving(true)
-    const { error } = await updateLoyaltyConfig({ pts_threshold: threshold, reward_brl: reward })
+    setFormError(null)
+    const { error } = await apiCreateCoupon({
+      code: code.trim(), discountType: type, discountValue: v,
+      maxUses:   maxUses.trim() ? parseInt(maxUses, 10) : null,
+      // "T23:59:59" sem "Z" é interpretado no fuso local do navegador —
+      // sem isso, uma data pura ("2026-07-14") vira meia-noite UTC, que já
+      // fica no passado durante boa parte do dia em fusos negativos (Brasil).
+      expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null,
+    })
     setSaving(false)
-    if (!error) {
-      setConfig(prev => prev ? { ...prev, pts_threshold: threshold, reward_brl: reward } : prev)
-      setShowEdit(false)
+    if (error) {
+      setFormError(error.includes('duplicate') || error.includes('unique')
+        ? 'Já existe um cupom com esse código.' : error)
+      return
     }
-  }, [editThreshold, editReward])
+    setCode(''); setValue(''); setMaxUses(''); setExpiresAt(''); setType('fixed')
+    setShowForm(false)
+    load()
+  }, [code, type, value, maxUses, expiresAt, load])
+
+  // Atualização otimista com reversão: se a chamada falhar (ex: sessão
+  // expirada, RLS), recarrega do banco para não deixar a tela mentindo
+  // sobre o estado real do cupom.
+  const handleToggle = useCallback(async (c: Coupon) => {
+    setCoupons(prev => prev.map(x => x.id === c.id ? { ...x, active: !x.active } : x))
+    const { error } = await apiToggleCoupon(c.id, !c.active)
+    if (error) load()
+  }, [load])
+
+  const handleDelete = useCallback(async (id: number) => {
+    setCoupons(prev => prev.filter(x => x.id !== id))
+    const { error } = await apiDeleteCoupon(id)
+    if (error) load()
+  }, [load])
 
   if (loading) return (
     <section className="p-5" style={{ borderRadius: 'var(--shape-xl)', border: '1px solid var(--md-outline-variant)', background: 'var(--md-surface-lowest)' }}>
@@ -424,66 +449,75 @@ function LoyaltySection() {
   )
 
   return (
-    <section className="p-5 space-y-4" aria-label="Sistema de fidelidade"
+    <section className="p-5 space-y-4" aria-label="Cupons de desconto"
       style={{ borderRadius: 'var(--shape-xl)', border: '1px solid var(--md-outline-variant)', background: 'var(--md-surface-lowest)' }}>
       <div className="flex items-center justify-between">
-        <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>⭐ Fidelidade</h2>
-        <button onClick={() => setShowEdit(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-full"
+        <h2 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-surface-variant)' }}>🎟️ Cupons</h2>
+        <button onClick={() => setShowForm(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-full"
           style={{ background: 'var(--md-primary-container)', color: 'var(--md-on-primary-container)', border: 'none' }}>
-          {showEdit ? 'Fechar' : 'Configurar'}
+          {showForm ? 'Fechar' : '+ Novo'}
         </button>
       </div>
-      <div className="flex items-center justify-between p-4 rounded-xl"
-        style={{ background: 'var(--md-surface-high)', border: '1px solid var(--md-outline-variant)' }}>
-        <div>
-          <p className="font-bold text-sm" style={{ color: 'var(--md-on-surface)' }}>{config?.active ? '🟢 Sistema ativo' : '🔴 Sistema inativo'}</p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--md-on-surface-variant)' }}>
-            {config?.active ? 'Usuários acumulando pontos' : 'Nenhum ponto será creditado'}
-          </p>
-        </div>
-        <button role="switch" aria-checked={config?.active}
-          onClick={handleToggle} disabled={saving}
-          className="w-12 h-7 rounded-full relative transition-colors shrink-0 disabled:opacity-50"
-          style={{ background: config?.active ? '#16A34A' : 'var(--md-outline-variant)', border: 'none' }}>
-          <span className="absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all"
-            style={{ left: config?.active ? '26px' : '4px' }} />
-        </button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { value: config?.pts_per_purchase ?? 1, label: 'ponto por compra' },
-          { value: `${config?.pts_threshold ?? 10} pts = ${formatBRL(config?.reward_brl ?? 5)}`, label: 'regra de resgate' },
-        ].map(item => (
-          <div key={item.label} className="rounded-xl p-3 text-center" style={{ background: 'var(--md-primary-container)' }}>
-            <p className="text-xl font-black" style={{ color: 'var(--md-on-primary-container)' }}>{item.value}</p>
-            <p className="text-[10px] font-bold mt-0.5" style={{ color: 'var(--md-on-primary-container)', opacity: 0.75 }}>{item.label}</p>
-          </div>
-        ))}
-      </div>
-      {showEdit && (
+
+      {showForm && (
         <div className="p-4 space-y-3 rounded-2xl" style={{ background: 'var(--md-primary-container)' }}>
-          <p className="text-xs font-bold uppercase tracking-widest" style={{ color: 'var(--md-on-primary-container)' }}>Editar regras</p>
-          <div className="space-y-1">
-            <label className="form-label">Pontos para resgatar</label>
-            <input type="number" min="1" step="1" value={editThreshold}
-              onChange={e => setEditThreshold(e.target.value)} className="form-input w-full" placeholder="Ex: 10" />
+          <input className="form-input w-full" placeholder="Código (ex: JABORANDI10)" value={code}
+            onChange={e => setCode(e.target.value.toUpperCase())} />
+          <div className="grid grid-cols-2 gap-2">
+            <select className="form-input" value={type} onChange={e => setType(e.target.value as DiscountType)}>
+              <option value="fixed">R$ fixo</option>
+              <option value="percent">% percentual</option>
+            </select>
+            <input className="form-input" placeholder={type === 'percent' ? 'Ex: 10' : 'Ex: 5.00'}
+              type="number" step="0.01" min="0" value={value} onChange={e => setValue(e.target.value)} />
           </div>
-          <div className="space-y-1">
-            <label className="form-label">Valor do desconto (R$)</label>
-            <input type="number" min="0" step="0.50" value={editReward}
-              onChange={e => setEditReward(e.target.value)} className="form-input w-full" placeholder="Ex: 5.00" />
+          <div className="grid grid-cols-2 gap-2">
+            <input className="form-input" placeholder="Limite de usos (opcional)" type="number" min="1"
+              value={maxUses} onChange={e => setMaxUses(e.target.value)} />
+            <input className="form-input" placeholder="Validade (opcional)" type="date"
+              value={expiresAt} onChange={e => setExpiresAt(e.target.value)} />
           </div>
+          {formError && (
+            <p className="text-xs font-semibold" style={{ color: 'var(--md-error)' }}>{formError}</p>
+          )}
           <div className="flex gap-2">
-            <button onClick={handleSave} disabled={saving} className="btn-primary flex-1 py-2 text-sm disabled:opacity-50">
-              {saving ? 'Salvando...' : 'Salvar'}
+            <button onClick={handleCreate} disabled={saving} className="btn-primary flex-1 py-2 text-sm disabled:opacity-50">
+              {saving ? 'Salvando...' : 'Criar cupom'}
             </button>
-            <button onClick={() => setShowEdit(false)} className="flex-1 py-2 text-sm font-bold rounded-full"
+            <button onClick={() => { setShowForm(false); setFormError(null) }} className="flex-1 py-2 text-sm font-bold rounded-full"
               style={{ border: '1px solid var(--md-outline-variant)', color: 'var(--md-on-surface-variant)', background: 'none' }}>
               Cancelar
             </button>
           </div>
         </div>
       )}
+
+      <div className="space-y-2">
+        {coupons.length === 0 ? (
+          <p className="text-center text-sm py-4" style={{ color: 'var(--md-on-surface-variant)' }}>Nenhum cupom cadastrado.</p>
+        ) : coupons.map(c => (
+          <div key={c.id} className="flex items-center gap-3 py-2 border-b last:border-0"
+            style={{ borderColor: 'var(--md-outline-variant)' }}>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-sm truncate" style={{ color: 'var(--md-on-surface)' }}>{c.code}</p>
+              <p className="text-xs" style={{ color: 'var(--md-on-surface-variant)' }}>
+                {c.discount_type === 'percent' ? `${c.discount_value}%` : formatBRL(c.discount_value)}
+                {' · '}{c.used_count}{c.max_uses != null ? `/${c.max_uses}` : ''} usos
+                {c.expires_at ? ` · até ${new Date(c.expires_at).toLocaleDateString('pt-BR')}` : ''}
+              </p>
+            </div>
+            <button role="switch" aria-checked={c.active} onClick={() => handleToggle(c)}
+              className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
+              style={{ background: c.active ? '#dcfce7' : '#FEE2E2', color: c.active ? '#16a34a' : '#dc2626', border: '1px solid var(--md-outline-variant)' }}>
+              {c.active ? '✅' : '⏸️'}
+            </button>
+            <button onClick={() => handleDelete(c.id)} className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
+              style={{ background: 'var(--md-error-container)', color: 'var(--md-on-error-container)', border: 'none' }}>
+              Remover
+            </button>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }
@@ -538,6 +572,7 @@ const newOrder: Order = {
             created_at:    row.created_at     as string,
           }
           setDbOrders(prev => [newOrder, ...prev])
+          playNewOrderSound()
         }
       )
       .subscribe()
@@ -744,8 +779,8 @@ export default function Admin({
         defaultStoreId={defaultOrderStoreId}
       />
 
-      {/* Fidelidade — apenas superadmin */}
-      {isSuperAdmin && <LoyaltySection />}
+      {/* Cupons — apenas superadmin */}
+      {isSuperAdmin && <CouponSection />}
 
       {/* Comércios */}
       <section style={sectionStyle} aria-label="Gerenciar comércios">

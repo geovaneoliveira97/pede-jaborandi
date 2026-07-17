@@ -213,7 +213,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
                       ))}
                       {order.discount > 0 && (
                         <div className="flex justify-between text-xs" style={{ color: '#16a34a' }}>
-                          <span>🎁 Desconto fidelidade</span>
+                          <span>🎟️ Desconto (cupom)</span>
                           <span>-{formatBRL(order.discount)}</span>
                         </div>
                       )}

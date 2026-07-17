@@ -27,7 +27,6 @@ const Menu     = lazy(() => import('./pages/Menu'))
 const Cart     = lazy(() => import('./pages/Cart'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 const Admin    = lazy(() => import('./pages/Admin'))
-const Points   = lazy(() => import('./pages/Points'))
 const Vitrine  = lazy(() => import('./pages/Vitrine'))
 
 const PAGE_TITLES: Record<AppView, string> = {
@@ -36,7 +35,6 @@ const PAGE_TITLES: Record<AppView, string> = {
   cart:     'Meu Carrinho',
   checkout: 'Finalizar Pedido',
   admin:    'Painel Admin',
-  pontos:   'Meus Pontos',
   vitrine:  'Preços',
 }
 
@@ -91,7 +89,7 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
 
     // Inicializa com hash da URL se disponível (ex: PWA bookmark)
     const hash = window.location.hash.replace('#', '') as AppView
-    const validViews: AppView[] = ['home', 'menu', 'cart', 'checkout', 'pontos', 'vitrine']
+    const validViews: AppView[] = ['home', 'menu', 'cart', 'checkout', 'vitrine']
     if (hash && validViews.includes(hash)) setView(hash)
 
     return () => window.removeEventListener('popstate', handlePop)
@@ -284,7 +282,6 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
             />
           </Suspense>
         )}
-        {view === 'pontos' && <Suspense fallback={null}><Points /></Suspense>}
         {view === 'admin' && (
           <Suspense fallback={null}>
             <Admin
