@@ -5,7 +5,6 @@ import type { AppView, Store, Product, StoreStatus, Order, OrderStatus } from '.
 import { useStores }        from './hooks/useStores'
 import { useCart }          from './hooks/useCart'
 import { useToast }         from './hooks/useToast'
-import { useInstallPrompt } from './hooks/useInstallPrompt'
 import {
   apiAddStore, apiUpdateStore,
   apiToggleStore,
@@ -17,7 +16,6 @@ import { isSupabaseConfigured, getSupabase } from './lib/supabase'
 
 import Header        from './components/Header'
 import BottomNav     from './components/BottomNav'
-import InstallBanner from './components/InstallBanner'
 import Toast         from './components/Toast'
 import { SkeletonHome, ErrorScreen } from './components/LoadingScreen'
 
@@ -70,7 +68,6 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
   }, [])
   const { items, totalItems, totalPrice, addItem, clearCart, changeQty } = useCart()
   const { message: toastMsg, visible: toastVisible, showToast } = useToast()
-  const { canInstall, install, dismiss } = useInstallPrompt()
 
   const activeStores = localStores ?? fetchedStores
 
@@ -226,7 +223,6 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
   if (loading) {
     return (
       <div className="min-h-screen pb-28">
-        {canInstall && <InstallBanner onInstall={install} onDismiss={dismiss} />}
         <Header
           title={PAGE_TITLES['home']}
           onAdminUnlock={handleAdminUnlock}
@@ -245,8 +241,6 @@ const [authUser,     setAuthUser]     = useState<AuthUser | null>(null)
 
   return (
     <div className="min-h-screen pb-28">
-      {canInstall && <InstallBanner onInstall={install} onDismiss={dismiss} />}
-
       <Header
         title={
           view === 'menu'    && currentStore ? currentStore.name :
