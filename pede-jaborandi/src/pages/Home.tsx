@@ -24,9 +24,13 @@ function extractCategories(stores: Store[]): string[] {
   return cats
 }
 
-export default function Home({ stores, onSelect }: HomeProps) {
+export default function Home({ stores: allStores, onSelect }: HomeProps) {
   const [search,   setSearch]   = useState('')
   const [category, setCategory] = useState('Todos')
+
+  // Comércios marcados como não-visíveis (em preparação) não aparecem na
+  // vitrine pública — mas continuam gerenciáveis normalmente no Admin.
+  const stores = useMemo(() => allStores.filter(s => s.visible !== false), [allStores])
 
   const categories = useMemo(() => extractCategories(stores), [stores])
 

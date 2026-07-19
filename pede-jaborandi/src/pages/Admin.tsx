@@ -851,6 +851,17 @@ export default function Admin({
                 <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
                   style={{ left: store.status === 'open' ? '22px' : '2px' }} />
               </button>
+              <button
+                onClick={() => onUpdateStore(store.id, { visible: store.visible === false })}
+                title={store.visible === false ? 'Oculto da vitrine — clique para mostrar' : 'Visível na vitrine — clique para ocultar'}
+                className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
+                style={{
+                  background: store.visible === false ? 'var(--md-error-container)' : 'var(--md-secondary-container)',
+                  color:      store.visible === false ? 'var(--md-on-error-container)' : 'var(--md-on-secondary-container)',
+                  border: 'none',
+                }}>
+                {store.visible === false ? '🙈 Oculto' : '👁️ Visível'}
+              </button>
               <button onClick={() => setEditingStore(store)} className="text-xs font-bold px-2.5 py-1.5 rounded-full shrink-0"
                 style={{ background: 'var(--md-secondary-container)', color: 'var(--md-on-secondary-container)', border: 'none' }}>
                 Editar

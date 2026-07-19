@@ -69,6 +69,7 @@ function mapStore(raw: Record<string, unknown>): Store {
     deliveryTime: raw.delivery_time != null ? (raw.delivery_time as string) : undefined,
     coverImage:   raw.cover_image  != null ? (raw.cover_image  as string) : undefined,
     owner_id:     raw.owner_id     != null ? (raw.owner_id     as string) : undefined,
+    visible:      raw.visible !== false,
     products:     rawProducts.map(mapProduct),
   }
 }

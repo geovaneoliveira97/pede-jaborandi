@@ -45,6 +45,7 @@ export async function apiUpdateStore(
   if (updates.color        !== undefined) payload.color         = updates.color
   if (updates.status       !== undefined) payload.status        = updates.status
   if (updates.mode         !== undefined) payload.mode          = updates.mode
+  if (updates.visible      !== undefined) payload.visible       = updates.visible
   if ('rating' in updates)                payload.rating        = updates.rating ?? null
   if (updates.deliveryTime !== undefined) payload.delivery_time = updates.deliveryTime || null
   if ('coverImage' in updates)            payload.cover_image   = updates.coverImage ?? null
