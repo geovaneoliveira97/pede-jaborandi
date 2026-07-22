@@ -143,19 +143,20 @@ export interface OrderItem {
 }
 
 export interface Order {
-  id:            string
-  store_id:      number
-  storeName:     string
-  customerName:  string
-  customerPhone: string
-  address:       string
-  items:         OrderItem[]
-  total:         number
-  payment:       string
-  discount:      number
-  final_total:   number
-  status:        OrderStatus
-  created_at:    string
+  id:               string
+  storeOrderNumber: number  // nº do pedido dentro da própria loja (1, 2, 3...), não o id global
+  store_id:         number
+  storeName:        string
+  customerName:     string
+  customerPhone:    string
+  address:          string
+  items:            OrderItem[]
+  total:            number
+  payment:          string
+  discount:         number
+  final_total:      number
+  status:           OrderStatus
+  created_at:       string
 }
 
 export function isStore(x: unknown): x is Store {

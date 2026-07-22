@@ -575,8 +575,9 @@ function OrdersSection({
         (payload) => {
           const row = payload.new as Record<string, unknown>
           if (filterStoreId && row.store_id !== filterStoreId) return
-const newOrder: Order = {
-            id:            String(row.id),
+          const newOrder: Order = {
+            id:               String(row.id),
+            storeOrderNumber: row.store_order_number as number,
             store_id:      row.store_id      as number,
             storeName:     (row.store_name   as string) ?? '',
             customerName:  row.customer_name  as string,

@@ -159,7 +159,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
             const colors     = statusColor(order.status)
             const curIdx     = ORDER_STATUS_FLOW.indexOf(order.status)
             const nextStatus = ORDER_STATUS_FLOW[curIdx + 1] as OrderStatus | undefined
-            const shortId    = String(order.id).padStart(6, '0').slice(-6).toUpperCase()
+            const shortId    = String(order.storeOrderNumber).padStart(2, '0')
             const hour       = new Date(order.created_at).toLocaleTimeString('pt-BR', {
               hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
             })
@@ -260,7 +260,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
                       <button
                         onClick={() => {
                           onUpdateStatus(order.id, nextStatus)
-                          const msg = buildStatusMessage(order.storeName, String(order.id), nextStatus, order.customerName)
+                          const msg = buildStatusMessage(order.storeName, shortId, nextStatus, order.customerName)
                           openWhatsApp(sanitizePhone(order.customerPhone), msg)
                         }}
                         className="w-full font-bold text-sm rounded-full py-2.5 mb-2"

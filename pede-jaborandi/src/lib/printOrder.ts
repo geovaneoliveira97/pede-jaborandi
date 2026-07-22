@@ -171,7 +171,7 @@ export function printOrder(order: Order, storeName: string) {
   const win = window.open('', '_blank', 'width=420,height=700')
   if (!win) return
 
-  const shortId = String(order.id).padStart(6, '0').slice(-6).toUpperCase()
+  const shortId = String(order.storeOrderNumber).padStart(2, '0')
   const dateStr = new Date(order.created_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
   const style    = buildReceiptStyle()
   const body     = buildReceiptBody(order, storeName, shortId, dateStr)

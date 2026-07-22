@@ -182,7 +182,8 @@ export async function apiGetRecentOrders(
   const { data, error } = await query
   if (error) return { orders: [], error: error.message }
   const orders: Order[] = (data ?? []).map((row: Record<string, unknown>) => ({
-    id:            String(row.id),
+    id:               String(row.id),
+    storeOrderNumber: row.store_order_number as number,
     store_id:      row.store_id      as number,
     storeName:     (row.store_name   as string) ?? '',
     customerName:  row.customer_name  as string,

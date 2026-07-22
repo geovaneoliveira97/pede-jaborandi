@@ -105,7 +105,7 @@ export function buildOrderMessage(
 
 export function buildStatusMessage(
   storeName:    string,
-  orderId:      string,
+  orderNumber:  string,
   status:       OrderStatus,
   customerName: string,
 ): string {
@@ -121,7 +121,7 @@ export function buildStatusMessage(
     ``,
     msgs[status],
     ``,
-    `_Pedido #${orderId.slice(-6).toUpperCase()} · Pede Jaborandi_`,
+    `_Pedido #${orderNumber} · Pede Jaborandi_`,
   ].join('\n')
 }
 
