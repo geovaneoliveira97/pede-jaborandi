@@ -52,10 +52,25 @@ interface ProductForm {
 }
 
 const DEFAULT_CRUSTS: PizzaCrustForm[] = [
-  { id: 'sem_borda', label: 'Sem borda',        extra: '0'  },
-  { id: 'trad',      label: 'Borda Tradicional', extra: '10' },
-  { id: 'vulcao',    label: 'Borda Vulcão',      extra: '20' },
+  { id: 'sem_borda',       label: 'Sem borda',                 extra: '0'  },
+  { id: 'trad_catupiry',   label: 'Borda Tradicional Catupiry', extra: '10' },
+  { id: 'trad_cheddar',    label: 'Borda Tradicional Cheddar',  extra: '10' },
+  { id: 'vulcao_catupiry', label: 'Borda Vulcão Catupiry',      extra: '20' },
+  { id: 'vulcao_cheddar',  label: 'Borda Vulcão Cheddar',       extra: '20' },
 ]
+
+// Gera id único a partir do rótulo — se dois tamanhos/bordas tiverem nomes
+// iguais (ou que gerem o mesmo slug), o app não consegue distinguir qual foi
+// selecionado e passa a marcar os dois ao mesmo tempo na tela do cliente.
+function assignUniqueIds<T extends { id: string; label: string }>(list: T[]): T[] {
+  const seen = new Map<string, number>()
+  return list.map(item => {
+    const base  = item.id || item.label.trim().toLowerCase().replace(/\s+/g, '_')
+    const count = seen.get(base) ?? 0
+    seen.set(base, count + 1)
+    return { ...item, id: count === 0 ? base : `${base}_${count}` }
+  })
+}
 
 const emptyStoreForm = (): StoreForm => ({
   name: '', category: CATEGORY_OPTIONS[0], description: '',
@@ -209,10 +224,10 @@ function EditProductModal({ product, stores, onSave, onCancel }: {
 
     const pizzaFields: Partial<Omit<Product, 'id'>> = form.isPizza ? {
       productType: 'pizza', allowHalf: form.allowHalf,
-      sizes:  form.sizes.filter(s => s.label.trim() && s.price.trim())
-                .map(s => ({ id: s.id || s.label.toLowerCase().replace(/\s+/g, '_'), label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
-      crusts: form.crusts.filter(c => c.label.trim())
-                .map(c => ({ id: c.id || c.label.toLowerCase().replace(/\s+/g, '_'), label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
+      sizes:  assignUniqueIds(form.sizes.filter(s => s.label.trim() && s.price.trim()))
+                .map(s => ({ id: s.id, label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
+      crusts: assignUniqueIds(form.crusts.filter(c => c.label.trim()))
+                .map(c => ({ id: c.id, label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
     } : { productType: 'item', allowHalf: false, sizes: undefined, crusts: undefined }
 
     setSaving(true)
@@ -601,9 +616,11 @@ const newOrder: Order = {
     setDbOrders(prev => prev.filter(o => o.id !== orderId))
   }, [])
 
+  // Vazio quando "todas as lojas" está selecionado — cada pedido já carrega
+  // seu próprio storeName correto, não dá pra assumir stores[0] como padrão.
   const currentStoreName = filterStoreId
     ? (stores.find(s => s.id === filterStoreId)?.name ?? '')
-    : (stores[0]?.name ?? '')
+    : ''
 
   return (
     <section aria-label="Pedidos recentes" style={{
@@ -680,10 +697,10 @@ export default function Admin({
 
     const pizzaFields: Partial<Omit<Product, 'id'>> = isPizza ? {
       productType: 'pizza', allowHalf,
-      sizes:  sizes.filter(s => s.label.trim() && s.price.trim())
-                .map(s => ({ id: s.id || s.label.toLowerCase().replace(/\s+/g, '_'), label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
-      crusts: crusts.filter(c => c.label.trim())
-                .map(c => ({ id: c.id || c.label.toLowerCase().replace(/\s+/g, '_'), label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
+      sizes:  assignUniqueIds(sizes.filter(s => s.label.trim() && s.price.trim()))
+                .map(s => ({ id: s.id, label: s.label.trim(), info: s.info.trim(), price: parseFloat(s.price) })),
+      crusts: assignUniqueIds(crusts.filter(c => c.label.trim()))
+                .map(c => ({ id: c.id, label: c.label.trim(), extra: parseFloat(c.extra) || 0 })),
     } : { productType: 'item' }
 
     onAddProduct(storeId, {

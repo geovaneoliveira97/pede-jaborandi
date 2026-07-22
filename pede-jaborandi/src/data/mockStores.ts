@@ -8,11 +8,13 @@ import type { Store } from '../types/types'
 
 // ── Bordas das Pizzas Tradicionais (grandes) ────────────────────────────────
 const BORDAS_TRADICIONAL = [
-  { id: 'sem_borda',    label: 'Sem borda',                          extra: 0  },
-  { id: 'trad',        label: 'Borda Tradicional (cheddar/catupiry)', extra: 10 },
-  { id: 'especial',    label: 'Borda Especial',                       extra: 15 },
-  { id: 'camarao',     label: 'Borda Camarão',                        extra: 12 },
-  { id: 'vulcao',      label: 'Borda Vulcão (cheddar/catupiry)',       extra: 20 },
+  { id: 'sem_borda',        label: 'Sem borda',                extra: 0  },
+  { id: 'trad_catupiry',    label: 'Borda Tradicional Catupiry', extra: 10 },
+  { id: 'trad_cheddar',     label: 'Borda Tradicional Cheddar',  extra: 10 },
+  { id: 'especial',         label: 'Borda Especial',             extra: 15 },
+  { id: 'camarao',          label: 'Borda Camarão',              extra: 12 },
+  { id: 'vulcao_catupiry',  label: 'Borda Vulcão Catupiry',      extra: 20 },
+  { id: 'vulcao_cheddar',   label: 'Borda Vulcão Cheddar',       extra: 20 },
 ]
 
 export const MOCK_STORES: Store[] = [
