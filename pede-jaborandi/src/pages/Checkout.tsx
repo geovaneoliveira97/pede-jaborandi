@@ -7,7 +7,7 @@ import { PAYMENT_LABELS, PICKUP_ADDRESS, CHANGE_FOR_MARKER } from '../types/type
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
 import { useAddressByCep } from '../hooks/useAddressByCep'
 import { validateCoupon, redeemCoupon, computeDiscount, type DiscountType } from '../lib/couponApi'
-import { formatBRL } from '../lib/format'
+import { formatBRL, describeItem } from '../lib/format'
 import { apiSaveOrder } from '../lib/adminApi'
 import { saveLastOrder } from '../components/LastOrderBanner'
 
@@ -663,14 +663,24 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       {/* ── Resumo ── */}
       <section style={sectionStyle} aria-label="Resumo do pedido">
         <p style={sectionLabelStyle}>🧾 Resumo</p>
-        {items.map(item => (
-          <div key={item.productId} className="flex justify-between text-sm mb-1.5">
-            <span style={{ color: 'var(--md-on-surface-variant)' }}>{item.qty}x {item.name}</span>
-            <span className="font-semibold" style={{ color: 'var(--md-on-surface)' }}>
-              {formatBRL(item.price * item.qty)}
-            </span>
-          </div>
-        ))}
+        {items.map(item => {
+          const { title, extra } = describeItem(item)
+          return (
+            <div key={item.productId} className="flex justify-between text-sm mb-1.5">
+              <span style={{ color: 'var(--md-on-surface-variant)' }}>
+                <span>{item.qty}x {title}</span>
+                {extra.map((line, i) => (
+                  <span key={i} style={{ display: 'block', fontSize: '11px', paddingLeft: '10px' }}>
+                    {line}
+                  </span>
+                ))}
+              </span>
+              <span className="font-semibold" style={{ color: 'var(--md-on-surface)' }}>
+                {formatBRL(item.price * item.qty)}
+              </span>
+            </div>
+          )
+        })}
         {discount > 0 && (
           <div className="flex justify-between text-sm mb-1.5">
             <span className="font-semibold" style={{ color: '#1B6B3A' }}>🎟️ Desconto (cupom)</span>
