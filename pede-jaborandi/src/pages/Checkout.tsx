@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import type { CartItem, Store, CustomerData, PaymentMethod } from '../types/types'
-import { PAYMENT_LABELS } from '../types/types'
+import { PAYMENT_LABELS, PICKUP_ADDRESS, CHANGE_FOR_MARKER } from '../types/types'
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
 import { useAddressByCep } from '../hooks/useAddressByCep'
 import { validateCoupon, redeemCoupon, computeDiscount, type DiscountType } from '../lib/couponApi'
@@ -12,6 +12,13 @@ import { apiSaveOrder } from '../lib/adminApi'
 import { saveLastOrder } from '../components/LastOrderBanner'
 
 type DeliveryType = 'delivery' | 'pickup'
+
+// Área de entrega — só entregamos em Jaborandi/SP. Comparação ignora
+// maiúsculas/acentos pra não recusar "Jaborandi" vs "JABORANDI" etc.
+const SERVICE_CITY = 'jaborandi'
+function normalizeCityName(value: string): string {
+  return value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
 
 interface CheckoutProps {
   items:      CartItem[]
@@ -38,6 +45,13 @@ function maskPhone(value: string): string {
   if (digits.length <= 6)  return `(${digits.slice(0,2)}) ${digits.slice(2)}`
   if (digits.length <= 10) return `(${digits.slice(0,2)}) ${digits.slice(2,6)}-${digits.slice(6)}`
   return `(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`
+}
+
+function maskMoney(value: string): string {
+  const digits = value.replace(/\D/g, '')
+  if (!digits) return ''
+  const cents = parseInt(digits, 10)
+  return (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function isPhoneValid(phone: string): boolean {
@@ -156,12 +170,17 @@ const sectionLabelStyle: React.CSSProperties = {
 export default function Checkout({ items, stores, totalPrice, onSuccess, showToast }: CheckoutProps) {
   const [customer, setCustomer] = useState<CustomerData>({
     name: '', phone: '', cep: '', street: '', number: '',
-    complement: '', neighborhood: '', city: '', reference: '', payment: 'dinheiro',
+    complement: '', neighborhood: '', city: '', reference: '', payment: 'dinheiro', changeFor: '',
   })
   const [deliveryType, setDeliveryType] = useState<DeliveryType>('delivery')
   const [sending,      setSending]      = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [showSendConfirm, setShowSendConfirm] = useState(false)
+
+  // Honeypot anti-bot: campo invisível para humanos — só bots que preenchem
+  // tudo automaticamente tendem a preencher isso. Se vier preenchido, ignora
+  // o pedido silenciosamente (não avisa nada, pra não ensinar o bot a evitar).
+  const [honeypot, setHoneypot] = useState('')
 
   // ── Cupom de desconto ──
   const [couponInput,    setCouponInput]    = useState('')
@@ -198,8 +217,16 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       setCustomer(prev => ({ ...prev, [field]: value })),
     [],
   )
-  const handleCepChange   = useCallback((raw: string) => setField('cep',   maskCep(raw)),   [setField])
-  const handlePhoneChange = useCallback((raw: string) => setField('phone', maskPhone(raw)), [setField])
+  const handleCepChange      = useCallback((raw: string) => setField('cep',       maskCep(raw)),   [setField])
+  const handlePhoneChange    = useCallback((raw: string) => setField('phone',     maskPhone(raw)), [setField])
+  const handleChangeForInput = useCallback((raw: string) => setField('changeFor', maskMoney(raw)), [setField])
+
+  // Ao trocar para outra forma de pagamento, limpa o troco (não faz sentido fora de dinheiro)
+  useEffect(() => {
+    if (customer.payment !== 'dinheiro' && customer.changeFor) {
+      setField('changeFor', '')
+    }
+  }, [customer.payment, customer.changeFor, setField])
 
   const discount   = coupon ? computeDiscount(totalPrice, coupon.discountType, coupon.discountValue) : 0
   const finalPrice = Math.max(0, totalPrice - discount)
@@ -255,7 +282,10 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       customerName:  customer.name.trim(),
       customerPhone: pending.phone,
       address:       pending.addressParts,
-      items:         items.map(i => ({ productId: i.productId, name: i.name, price: i.price, qty: i.qty })),
+      items:         items.map(i => ({
+        productId: i.productId, name: i.name, price: i.price, qty: i.qty,
+        size: i.size, crust: i.crust, half: i.half,
+      })),
       total:      totalPrice,
       payment:    customer.payment,
       discount,
@@ -318,6 +348,7 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
 
   const handleSubmit = useCallback(() => {
     if (!store) return
+    if (honeypot.trim()) return // bot — descarta em silêncio
 
     const { name, phone, street, number, city } = customer
 
@@ -329,11 +360,25 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
     if (deliveryType === 'delivery') {
       if (!street.trim() || !city.trim()) { showToast('Busque o CEP ou preencha o endereço!'); return }
       if (!number.trim())                 { showToast('Informe o número do imóvel!');           return }
+      if (normalizeCityName(city) !== SERVICE_CITY) {
+        showToast('Só entregamos em Jaborandi/SP — confira o CEP e a cidade informados.')
+        return
+      }
     }
 
-    const addressParts = deliveryType === 'delivery'
-      ? [street, `nº ${number}`, customer.complement, customer.neighborhood, city].filter(Boolean).join(', ')
-      : 'Retirada no local'
+    // Mesmos campos usados em buildFullAddress (whatsapp.ts) — inclui CEP e
+    // referência, senão esses dados se perdem para sempre ao salvar o pedido
+    // (o endereço da mensagem de WhatsApp é montado à parte, do estado vivo).
+    const baseAddress = deliveryType === 'delivery'
+      ? [street, `nº ${number}`, customer.complement ? `(${customer.complement})` : '', customer.neighborhood, city, customer.cep ? `CEP ${customer.cep}` : '']
+          .filter(Boolean).join(', ')
+        + (customer.reference.trim() ? ` — Ref: ${customer.reference.trim()}` : '')
+      : PICKUP_ADDRESS
+
+    // Troco também só existe no estado vivo do checkout — sem isso, some ao salvar.
+    const addressParts = customer.payment === 'dinheiro' && customer.changeFor.trim()
+      ? `${baseAddress}${CHANGE_FOR_MARKER}${customer.changeFor.trim()}`
+      : baseAddress
 
     // Abre o WhatsApp ANTES de gravar qualquer coisa no banco — o pedido só
     // é registrado quando o cliente volta pra aba (ou confirma manualmente).
@@ -352,7 +397,7 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
     }
     setSending(true)
     setAwaitingReturn(true)
-  }, [store, customer, items, deliveryType, discount, showToast])
+  }, [store, customer, items, deliveryType, discount, showToast, honeypot])
 
   const cepFeedbackMsg: Record<typeof cepStatus, string> = {
     idle: '', loading: '🔍 Buscando endereço...', success: '✓ Endereço encontrado',
@@ -597,6 +642,22 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
             )
           })}
         </div>
+
+        {customer.payment === 'dinheiro' && (
+          <div className="space-y-1 mt-3 animate-enter">
+            <label htmlFor="change-for" className="form-label">Troco para quanto? (opcional)</label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold"
+                style={{ color: 'var(--md-on-surface-variant)' }}>R$</span>
+              <input id="change-for" type="text" inputMode="numeric"
+                value={customer.changeFor} onChange={e => handleChangeForInput(e.target.value)}
+                placeholder="0,00" className="form-input" style={{ paddingLeft: '32px' }} />
+            </div>
+            <p className="text-[11px]" style={{ color: 'var(--md-on-surface-variant)' }}>
+              Vai pagar com nota maior? Informe pra loja já separar o troco.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* ── Resumo ── */}
@@ -631,6 +692,11 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
           </div>
         </div>
       </section>
+
+      {/* Honeypot — invisível para humanos, campos assim tendem a ser preenchidos por bots */}
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+        value={honeypot} onChange={e => setHoneypot(e.target.value)}
+        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }} />
 
       <button onClick={handleSubmit} disabled={sending}
         className="btn-primary w-full py-4 text-base disabled:opacity-60 disabled:cursor-not-allowed">

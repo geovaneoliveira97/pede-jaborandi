@@ -7,6 +7,14 @@ export type PaymentMethod = 'dinheiro' | 'pix' | 'cartao'
 
 export const DEFAULT_STORE_COLOR = '#E85D26'
 
+// Sentinela gravado em Order.address quando o pedido é para retirada no
+// local (o tipo de entrega em si não é persistido, só esse texto literal).
+export const PICKUP_ADDRESS = 'Retirada no local'
+
+// Marcador usado para embutir o troco no final de Order.address (não há
+// coluna própria para isso no banco — ver format.ts:splitChangeFor).
+export const CHANGE_FOR_MARKER = ' — Troco para R$ '
+
 export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
   dinheiro: 'Dinheiro',
   pix:      'Pix',
@@ -34,9 +42,9 @@ export interface PizzaSize {
 }
 
 export interface PizzaCrust {
-  id:       string           // ex: 'sem_borda' | 'catupiry' | 'cheddar'
-  label:    string           // ex: 'Sem borda'
-  extra:    number           // acréscimo ao preço (0 para sem borda)
+  id:     string           // ex: 'sem_borda' | 'catupiry' | 'cheddar'
+  label:  string           // ex: 'Sem borda'
+  extra:  number           // acréscimo ao preço (0 para sem borda)
 }
 
 // ── Produto genérico ───────────────────────────────────────────────────────
@@ -117,6 +125,7 @@ export interface CustomerData {
   city:         string
   reference:    string
   payment:      PaymentMethod
+  changeFor:    string   // troco para quanto (só relevante quando payment === 'dinheiro')
 }
 
 // ── Pedido ──────────────────────────────────────────────────────────────────
@@ -126,6 +135,11 @@ export interface OrderItem {
   name:      string
   price:     number
   qty:       number
+
+  // Campos opcionais — presentes somente quando o item é uma pizza
+  size?:     string   // ex: 'Grande 35cm'
+  crust?:    string   // ex: 'Catupiry'
+  half?:     string   // ex: 'Calabresa' (nome do 2º sabor, se houver)
 }
 
 export interface Order {
