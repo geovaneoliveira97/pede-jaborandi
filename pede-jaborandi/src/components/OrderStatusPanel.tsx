@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { Order, OrderStatus } from '../types/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_FLOW } from '../types/types'
 import { buildStatusMessage, openWhatsApp } from '../lib/whatsapp'
-import { formatBRL } from '../lib/format'
+import { formatBRL, describeItem, paymentLabel, splitChangeFor } from '../lib/format'
 import { printOrder } from '../lib/printOrder'
 
 type FilterTab = 'ativos' | 'todos' | 'entregues'
@@ -163,6 +163,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
             const hour       = new Date(order.created_at).toLocaleTimeString('pt-BR', {
               hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
             })
+            const { address, changeFor } = splitChangeFor(order.address)
 
             return (
               <div key={order.id}
@@ -184,7 +185,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
                       {order.customerName} · #{shortId}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>
-                      {hour} · {formatBRL(order.final_total)} · {order.payment}
+                      {hour} · {formatBRL(order.final_total)} · {paymentLabel(order.payment)}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -201,16 +202,29 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
                   <div style={{ borderTop: '1px solid #f3f4f6', padding: '12px 14px' }}>
 
                     {/* Endereço */}
-                    <p className="text-xs mb-3" style={{ color: '#6b7280' }}>📍 {order.address}</p>
+                    <p className={`text-xs ${changeFor ? '' : 'mb-3'}`} style={{ color: '#6b7280' }}>📍 {address}</p>
+                    {changeFor && (
+                      <p className="text-xs font-bold mb-3" style={{ color: '#16a34a' }}>
+                        💵 Troco para: R$ {changeFor}
+                      </p>
+                    )}
 
                     {/* Itens */}
                     <div className="space-y-1 mb-4">
-                      {order.items.map((item, i) => (
-                        <div key={i} className="flex justify-between text-xs" style={{ color: '#6b7280' }}>
-                          <span>{item.qty}x {item.name}</span>
-                          <span>{formatBRL(item.price * item.qty)}</span>
-                        </div>
-                      ))}
+                      {order.items.map((item, i) => {
+                        const { title, extra } = describeItem(item)
+                        return (
+                          <div key={i}>
+                            <div className="flex justify-between text-xs" style={{ color: '#6b7280' }}>
+                              <span>{item.qty}x {title}</span>
+                              <span>{formatBRL(item.price * item.qty)}</span>
+                            </div>
+                            {extra.map((l, j) => (
+                              <div key={j} className="text-[10px] pl-3" style={{ color: '#9ca3af' }}>{l}</div>
+                            ))}
+                          </div>
+                        )
+                      })}
                       {order.discount > 0 && (
                         <div className="flex justify-between text-xs" style={{ color: '#16a34a' }}>
                           <span>🎟️ Desconto (cupom)</span>
@@ -257,7 +271,7 @@ export default function OrderStatusPanel({ orders, storeName = '', onUpdateStatu
 
                     {/* Imprimir */}
                     <button
-                      onClick={() => printOrder(order, storeName || order.storeName)}
+                      onClick={() => printOrder(order, order.storeName || storeName)}
                       className="w-full font-bold text-sm rounded-full py-2.5 mb-2"
                       style={{ background: '#1e293b', color: '#fff', border: 'none', cursor: 'pointer' }}>
                       🖨️ Imprimir cupom

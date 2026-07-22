@@ -90,7 +90,11 @@ export function buildOrderMessage(
   lines.push(`💳 *Pagamento:* ${PAYMENT_LABELS[customer.payment]}`)
 
   if (customer.payment === 'dinheiro') {
-    lines.push(`   _(confirmar troco se necessário)_`)
+    lines.push(
+      customer.changeFor.trim()
+        ? `   💵 Troco para: R$ ${customer.changeFor.trim()}`
+        : `   _(não precisa de troco)_`
+    )
   }
 
   lines.push(``)
