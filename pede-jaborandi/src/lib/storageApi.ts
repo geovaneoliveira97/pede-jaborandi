@@ -46,12 +46,3 @@ export async function uploadImage(
   const { data } = getSupabase().storage.from(BUCKET).getPublicUrl(path)
   return { url: data.publicUrl, error: null }
 }
-
-export async function deleteImage(publicUrl: string): Promise<void> {
-  if (!isSupabaseConfigured()) return
-  const marker = `/object/public/${BUCKET}/`
-  const idx    = publicUrl.indexOf(marker)
-  if (idx === -1) return
-  const path = publicUrl.slice(idx + marker.length)
-  await getSupabase().storage.from(BUCKET).remove([path])
-}

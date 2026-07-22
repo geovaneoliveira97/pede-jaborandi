@@ -70,29 +70,6 @@ export function SkeletonHome() {
   )
 }
 
-// ── Full-screen loading (usado apenas fora do layout principal) ───────────────
-
-export function LoadingScreen() {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-label="Carregando comércios"
-      className="min-h-screen flex flex-col items-center justify-center gap-4"
-      style={{ background: 'var(--md-background)' }}
-    >
-      <div
-        className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin"
-        style={{ borderColor: 'var(--md-primary)', borderTopColor: 'transparent' }}
-        aria-hidden="true"
-      />
-      <p className="text-sm font-medium" style={{ color: 'var(--md-on-surface-variant)' }}>
-        Carregando comércios...
-      </p>
-    </div>
-  )
-}
-
 export function ErrorScreen({ onRetry }: ErrorScreenProps) {
   return (
     <div
