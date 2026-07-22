@@ -4,7 +4,7 @@
 // garantindo que pizzas com configurações diferentes sejam alteradas corretamente.
 
 import type { CartItem, Store } from '../types/types'
-import { formatBRL } from '../lib/format'
+import { formatBRL, describeItem } from '../lib/format'
 
 interface CartProps {
   items:       CartItem[]
@@ -173,18 +173,24 @@ export default function Cart({
           background:   'var(--md-surface-low)',
         }}
       >
-        {items.map(item => (
-          <div key={getKey(item)} className="flex justify-between text-sm">
-            <span style={{ color: 'var(--md-on-surface-variant)' }}>
-              {item.qty}x {item.name}
-              {item.size && ` · ${item.size}`}
-              {item.half && ` ½ ${item.half}`}
-            </span>
-            <span className="font-semibold" style={{ color: 'var(--md-on-surface)' }}>
-              {formatBRL(item.price * item.qty)}
-            </span>
-          </div>
-        ))}
+        {items.map(item => {
+          const { title, extra } = describeItem(item)
+          return (
+            <div key={getKey(item)} className="flex justify-between text-sm">
+              <span style={{ color: 'var(--md-on-surface-variant)' }}>
+                <span>{item.qty}x {title}</span>
+                {extra.map((line, i) => (
+                  <span key={i} style={{ display: 'block', fontSize: '11px', paddingLeft: '10px' }}>
+                    {line}
+                  </span>
+                ))}
+              </span>
+              <span className="font-semibold" style={{ color: 'var(--md-on-surface)' }}>
+                {formatBRL(item.price * item.qty)}
+              </span>
+            </div>
+          )
+        })}
         <div className="h-px my-2" style={{ background: 'var(--md-outline-variant)' }} />
         <div className="flex justify-between items-baseline">
           <span className="font-bold" style={{ color: 'var(--md-on-surface)' }}>Total</span>
