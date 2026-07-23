@@ -717,6 +717,9 @@ export default function Admin({
 
   const handleLogout = useCallback(async () => {
     if (isSupabaseConfigured()) await getSupabase().auth.signOut()
+    // Remove qualquer resposta de tabela autenticada (ex: orders/coupons de
+    // uma versão anterior do sw.js) que ainda esteja retida na Cache Storage.
+    if ('caches' in window) await caches.delete('pede-jaborandi-data-v5')
     onLogout()
   }, [onLogout])
 

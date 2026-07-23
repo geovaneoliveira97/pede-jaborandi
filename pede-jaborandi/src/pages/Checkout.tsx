@@ -6,7 +6,7 @@ import type { CartItem, Store, CustomerData, PaymentMethod } from '../types/type
 import { PAYMENT_LABELS, PICKUP_ADDRESS, CHANGE_FOR_MARKER } from '../types/types'
 import { buildOrderMessage, openWhatsApp } from '../lib/whatsapp'
 import { useAddressByCep } from '../hooks/useAddressByCep'
-import { validateCoupon, redeemCoupon, computeDiscount, type DiscountType } from '../lib/couponApi'
+import { validateCoupon, computeDiscount, type DiscountType } from '../lib/couponApi'
 import { formatBRL, describeItem } from '../lib/format'
 import { apiSaveOrder } from '../lib/adminApi'
 import { saveLastOrder } from '../components/LastOrderBanner'
@@ -267,15 +267,10 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
     pendingOrderRef.current = null
     setAwaitingReturn(false)
 
-    if (coupon) {
-      const res = await redeemCoupon(coupon.code)
-      if (!res.ok) {
-        showToast(res.message || 'Cupom não pôde ser aplicado. Tente novamente.')
-        setSending(false)
-        return
-      }
-    }
-
+    // O cupom (se houver) é validado e consumido pelo próprio banco, na mesma
+    // transação do INSERT do pedido — não existe mais uma chamada separada
+    // de "resgatar cupom" (isso permitia esgotar o cupom sem nunca fechar
+    // pedido). Ver supabase/migrations/20260723_security_fixes.sql.
     const { error: saveErr } = await apiSaveOrder({
       storeId:       pending.storeId,
       storeName:     pending.storeName,
@@ -290,11 +285,18 @@ export default function Checkout({ items, stores, totalPrice, onSuccess, showToa
       payment:    customer.payment,
       discount,
       finalTotal: finalPrice,
+      couponCode: coupon?.code ?? null,
     })
 
     if (saveErr) {
       if (import.meta.env.DEV) console.error('[apiSaveOrder]', saveErr)
-      showToast('Erro ao registrar pedido. Verifique sua conexão e tente novamente.')
+      // Mensagens de cupom (expirado/esgotado/não confere) vêm direto da
+      // trigger do banco — mais úteis pro cliente do que o genérico abaixo.
+      showToast(
+        saveErr.toLowerCase().includes('cupom')
+          ? saveErr
+          : 'Erro ao registrar pedido. Verifique sua conexão e tente novamente.'
+      )
       setSending(false)
       return
     }

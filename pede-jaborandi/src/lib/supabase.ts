@@ -10,7 +10,7 @@
 // sem nunca chegar a instanciar o cliente.
 //
 // Desenvolvimento local: crie um '.env' na raiz com as variáveis abaixo.
-// Produção (Render): configure as variáveis no painel do serviço.
+// Produção (Netlify): configure as variáveis no painel do site (Site settings → Environment variables).
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 

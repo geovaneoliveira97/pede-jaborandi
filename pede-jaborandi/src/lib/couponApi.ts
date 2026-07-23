@@ -1,9 +1,16 @@
 // src/lib/couponApi.ts
 //
 // Cupons de desconto — substitui o sistema de fidelidade por telefone.
-// A tabela `coupons` não tem policy pública de SELECT: validação e resgate
-// passam pelas funções RPC `validate_coupon`/`redeem_coupon` (SECURITY DEFINER),
-// então o código do cupom nunca é listável por quem não é admin.
+// A tabela `coupons` não tem policy pública de SELECT: validação passa pela
+// RPC `validate_coupon` (SECURITY DEFINER), então o código do cupom nunca é
+// listável por quem não é admin.
+//
+// O resgate (consumir uma usagem) NÃO é mais feito por chamada solta do
+// client — isso permitia esgotar o max_uses de um cupom sem nunca fechar um
+// pedido. Agora o código do cupom viaja dentro do INSERT de `orders`
+// (coupon_code) e o banco valida + consome atomicamente via trigger
+// (ver supabase/migrations/20260723_security_fixes.sql). Só chamar
+// apiSaveOrder com `couponCode` preenchido.
 
 import { getSupabase, isSupabaseConfigured } from './supabase'
 
@@ -43,18 +50,6 @@ export async function validateCoupon(code: string): Promise<CouponResult> {
     .single<Record<string, unknown>>()
   if (error) return { ok: false, discountType: null, discountValue: null, message: 'Cupom inválido' }
   return mapResult(data, 'Cupom inválido')
-}
-
-/** Confirma o uso do cupom (debita uma usagem) — só chamar após o pedido confirmado. */
-export async function redeemCoupon(code: string): Promise<CouponResult> {
-  if (!isSupabaseConfigured()) {
-    return { ok: true, discountType: 'fixed', discountValue: 5, message: 'ok' }
-  }
-  const { data, error } = await getSupabase()
-    .rpc('redeem_coupon', { p_code: code.trim() })
-    .single<Record<string, unknown>>()
-  if (error) return { ok: false, discountType: null, discountValue: null, message: 'Não foi possível aplicar o cupom' }
-  return mapResult(data, 'Não foi possível aplicar o cupom')
 }
 
 // ── Administração (superadmin) ──────────────────────────────────────────────

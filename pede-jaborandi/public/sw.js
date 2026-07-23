@@ -1,11 +1,20 @@
-const CACHE_NAME = 'pede-jaborandi-v4'
-const DATA_CACHE = 'pede-jaborandi-data-v4'
-const FONT_CACHE = 'pede-jaborandi-fonts-v4'
+const CACHE_NAME = 'pede-jaborandi-v5'
+const DATA_CACHE = 'pede-jaborandi-data-v5'
+const FONT_CACHE = 'pede-jaborandi-fonts-v5'
 
 // Só cacheia URLs com scheme http/https.
 // chrome-extension://, moz-extension://, data: etc. lançam TypeError no cache.put().
 function isCacheable(url) {
   return url.startsWith('http://') || url.startsWith('https://')
+}
+
+// Só cacheia dados públicos (cardápio, sem autenticação). Nunca cachear
+// /rest/v1/orders, /coupons ou qualquer outra tabela que carregue dados de
+// admin/PII — essas respostas ficariam retidas na Cache Storage mesmo depois
+// do logout, já que o Service Worker não tem visibilidade da sessão.
+const PUBLIC_DATA_TABLES = ['stores', 'products']
+function isPublicSupabaseData(url) {
+  return PUBLIC_DATA_TABLES.some(table => url.includes(`/rest/v1/${table}`))
 }
 
 const STATIC_ASSETS = [
@@ -59,8 +68,8 @@ self.addEventListener('fetch', event => {
     return
   }
 
-  // 2. Dados Supabase — Network-first com fallback offline
-  if (url.includes('supabase.co') && method === 'GET') {
+  // 2. Dados Supabase (só tabelas públicas) — Network-first com fallback offline
+  if (url.includes('supabase.co') && method === 'GET' && isPublicSupabaseData(url)) {
     event.respondWith(
       fetch(event.request)
         .then(response => {
@@ -74,6 +83,10 @@ self.addEventListener('fetch', event => {
     )
     return
   }
+
+  // 2b. Qualquer outra chamada Supabase (autenticada: orders, coupons, rpc...)
+  // — passa direto pra rede, sem interceptar nem cachear em lugar nenhum.
+  if (url.includes('supabase.co')) return
 
   // 3. Fontes — Stale-While-Revalidate
   if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {

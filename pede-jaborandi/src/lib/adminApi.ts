@@ -143,6 +143,7 @@ export interface SaveOrderParams {
   payment:       string
   discount:      number
   finalTotal:    number
+  couponCode?:   string | null
 }
 
 export async function apiSaveOrder(
@@ -162,6 +163,7 @@ export async function apiSaveOrder(
       payment:        params.payment,
       discount:       params.discount,
       final_total:    params.finalTotal,
+      coupon_code:    params.couponCode ?? null,
       status:         'recebido',
     })
   if (error) return { id: null, error: error.message }
