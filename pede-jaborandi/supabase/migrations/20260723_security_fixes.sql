@@ -24,7 +24,10 @@ declare
   item      record;
   v_floor   numeric;
 begin
-  for item in select * from jsonb_to_recordset(new.items) as x(productid int, price numeric, qty int)
+  -- Colunas entre aspas casam com a capitalização exata da chave no JSON
+  -- (jsonb_to_recordset compara texto da chave, é case-sensitive: sem aspas
+  -- "productid" nunca bate com "productId" enviado pelo app e vira NULL).
+  for item in select * from jsonb_to_recordset(new.items) as x("productId" int, price numeric, qty int)
   loop
     select least(
              p.price,
@@ -33,16 +36,16 @@ begin
            )
       into v_floor
       from public.products p
-     where p.id = item.productid
+     where p.id = item."productId"
        and p.store_id = new.store_id;
 
     if v_floor is null then
-      raise exception 'Produto % não encontrado nesta loja', item.productid;
+      raise exception 'Produto % não encontrado nesta loja', item."productId";
     end if;
 
     if item.price < v_floor - 0.01 then
       raise exception 'Preço do item % abaixo do mínimo permitido (enviado: %, mínimo: %)',
-        item.productid, item.price, v_floor;
+        item."productId", item.price, v_floor;
     end if;
   end loop;
 
