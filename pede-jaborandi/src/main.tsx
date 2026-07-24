@@ -42,8 +42,26 @@ if (fontsLink) {
 // Registra o Service Worker apenas se o navegador tiver suporte.
 // O registro ocorre no evento 'load' para não competir com o carregamento
 // inicial da página, garantindo que o app já esteja visível antes do SW iniciar.
+//
+// Por padrão o navegador só checa se existe um sw.js novo em pouquíssimas
+// situações (navegação nova, ~1x por dia em segundo plano) — em celular,
+// principalmente instalado como PWA na tela inicial, isso faz deploys novos
+// demorarem dias pra chegar no usuário. Força a checagem toda vez que o app
+// volta a ficar visível (o usuário reabre o app/troca de aba) e recarrega
+// automaticamente, uma única vez, quando um SW novo assume o controle.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {/* silencia erros de rede */})
+    navigator.serviceWorker.register('/sw.js').then(registration => {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update()
+      })
+    }).catch(() => {/* silencia erros de rede */})
+  })
+
+  let reloaded = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloaded) return
+    reloaded = true
+    window.location.reload()
   })
 }
