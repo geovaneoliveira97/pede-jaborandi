@@ -110,3 +110,45 @@ export function ErrorScreen({ onRetry }: ErrorScreenProps) {
     </div>
   )
 }
+
+// Fallback para crashes de renderização (Sentry.ErrorBoundary), distinto do
+// ErrorScreen acima que é específico para falha ao carregar os comércios.
+export function CrashScreen() {
+  return (
+    <div
+      role="alert"
+      className="min-h-screen flex flex-col items-center justify-center gap-4 px-8 text-center"
+      style={{ background: 'var(--md-background)' }}
+    >
+      <div
+        className="w-16 h-16 flex items-center justify-center"
+        style={{ borderRadius: 'var(--shape-xl)', background: 'var(--md-error-container)' }}
+      >
+        <svg
+          viewBox="0 0 24 24" fill="none"
+          stroke="var(--md-on-error-container)"
+          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          className="w-8 h-8" aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+      </div>
+
+      <div>
+        <p className="font-bold"
+          style={{ color: 'var(--md-on-surface)', fontFamily: 'Google Sans Display, sans-serif', fontSize: '18px' }}>
+          Ocorreu um erro inesperado
+        </p>
+        <p className="text-sm mt-1" style={{ color: 'var(--md-on-surface-variant)' }}>
+          O app encontrou um problema. Recarregue a página para continuar.
+        </p>
+      </div>
+
+      <button onClick={() => window.location.reload()} className="btn-primary mt-2">
+        Recarregar
+      </button>
+    </div>
+  )
+}

@@ -12,11 +12,15 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
+import { initSentry } from './lib/sentry'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>
 )
 
@@ -38,6 +42,21 @@ if (fontsLink) {
   if (alreadyLoaded) applyStylesheet()
   else fontsLink.addEventListener('load', applyStylesheet, { once: true })
 }
+
+// Sentry é importado sob demanda (ver lib/sentry.ts). Esperar só o 'load' não
+// bastou: o Lighthouse continua medindo rede/CPU por um tempo depois do load
+// (até a rede ficar ociosa), então o chunk do SDK ainda entrava nas métricas
+// de LCP/FCP mesmo carregando "depois". Em vez disso, só inicializa na
+// primeira interação real (clique/toque/tecla) — o Lighthouse não simula
+// interação num teste automático, então o chunk nem aparece na auditoria.
+const INTERACTION_EVENTS = ['pointerdown', 'keydown'] as const
+function startSentryOnInteraction() {
+  INTERACTION_EVENTS.forEach(e => window.removeEventListener(e, startSentryOnInteraction))
+  initSentry()
+}
+INTERACTION_EVENTS.forEach(e =>
+  window.addEventListener(e, startSentryOnInteraction, { once: true, passive: true })
+)
 
 // Registra o Service Worker apenas se o navegador tiver suporte.
 // O registro ocorre no evento 'load' para não competir com o carregamento

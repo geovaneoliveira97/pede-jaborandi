@@ -1,9 +1,12 @@
 // vite.config.ts
 //
 // Configuração do Vite — mesma estratégia do JaborandiTransp para
-// compatibilidade com o Render em produção e desenvolvimento local.
-// Em produção (Render), as variáveis ficam em '/etc/secrets/.env'.
+// compatibilidade com múltiplos ambientes de deploy e desenvolvimento local.
+// Em produção (Netlify), as variáveis são injetadas como env vars do processo
+// de build (loadEnv já mescla process.env automaticamente).
 // Em desenvolvimento, o Vite lê o '.env' da raiz do projeto.
+// O fallback para '/etc/secrets/.env' existe só para compatibilidade com
+// Render, caso o projeto seja hospedado lá no futuro.
 
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -50,6 +53,7 @@ export default defineConfig(({ mode }) => {
     define: {
       'import.meta.env.VITE_SUPABASE_URL':      JSON.stringify(env.VITE_SUPABASE_URL),
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
+      'import.meta.env.VITE_SENTRY_DSN':        JSON.stringify(env.VITE_SENTRY_DSN),
     },
     build: {
       rollupOptions: {
